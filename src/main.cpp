@@ -1,10 +1,21 @@
 #include <archive.h>
 #include <archive_entry.h>
+#include <dirent.h>
 #include <emscripten/bind.h>
+#include <emscripten/wasmfs.h>
+#include <stdio.h>
+#include <filesystem>
 #include <string>
+#include <thread>
 
 bool extract_book(std::string file_path) {
   auto return_code = ARCHIVE_OK;
+  auto wasm_backend = wasmfs_create_opfs_backend();
+  if (wasm_backend == nullptr) {
+    printf("Failed to initialize wasm filesystem\n");
+    return false;
+  }
+
   auto working_archive = archive_read_new();
 
   archive_read_support_filter_all(working_archive);
@@ -16,16 +27,33 @@ bool extract_book(std::string file_path) {
   archive_read_support_format_zip_seekable(working_archive);
   archive_read_support_format_zip_streamable(working_archive);
 
-  archive_read_open_filename(working_archive, file_path.c_str(), 10240);
+  auto path = std::filesystem::path(file_path);
+  auto exists = std::filesystem::exists(path);
+  printf("it exists? %d\n", exists);
+  // printf("file system items:\n");
+  // for (const auto& item : std::filesystem::recursive_directory_iterator(path)) {
+  //   printf("%s\n", item.path().c_str());
+  // }
+
+  return_code = archive_read_open_filename(working_archive, file_path.c_str(), 10240);
 
   // return_code = archive_read_open_memory(working_archive, file, sizeof(file));
   if (return_code != ARCHIVE_OK) {
+    printf("archive open from path %s failed\n", file_path.c_str());
     return false;
   }
 
   archive_read_free(working_archive);
-  remove(file_path.c_str());
+  printf("freeing archive\n");
 
+  return_code = remove(file_path.c_str());
+  printf("cleaning up temp file\n");
+  if (return_code != 0) {
+    printf("removing temp file failed\n");
+    return false;
+  }
+
+  printf("exiting successful\n");
   return true;
 }
 

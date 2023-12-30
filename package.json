@@ -1,8 +1,19 @@
 {
-  "name": "extract",
-  "version": "0.0.1",
+  "name": "extract-zip-rar",
+  "version": "0.0.9",
   "description": "Utility using libarchive to extract .zip and .rar archives.",
-  "main": "",
+  "type": "module",
+  "main": "./dist/extract.js",
+  "types": "./dist/index.d.js",
+  "exports": {
+    ".": {
+      "import": "./dist/extract.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
