@@ -4,6 +4,8 @@ emcc \
 -sWASMFS \
 -sFORCE_FILESYSTEM \
 -sEXPORTED_RUNTIME_METHODS=FS \
+-sEXPORTED_FUNCTIONS=_malloc \
+-sALLOW_MEMORY_GROWTH \
 -sPTHREAD_POOL_SIZE=navigator.hardwareConcurrency \
 -O0 \
 -std=c++17 \
