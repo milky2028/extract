@@ -3,7 +3,7 @@
 #include <emscripten/bind.h>
 #include <string>
 
-bool extract_book(std::string file_name) {
+bool extract_book(std::string file_path) {
   auto return_code = ARCHIVE_OK;
   auto working_archive = archive_read_new();
 
@@ -16,9 +16,7 @@ bool extract_book(std::string file_name) {
   archive_read_support_format_zip_seekable(working_archive);
   archive_read_support_format_zip_streamable(working_archive);
 
-  std::string path = "/tmp/";
-  path.append(file_name);
-  archive_read_open_filename(working_archive, path.c_str(), 10240);
+  archive_read_open_filename(working_archive, file_path.c_str(), 10240);
 
   // return_code = archive_read_open_memory(working_archive, file, sizeof(file));
   if (return_code != ARCHIVE_OK) {
@@ -26,6 +24,8 @@ bool extract_book(std::string file_name) {
   }
 
   archive_read_free(working_archive);
+  remove(file_path.c_str());
+
   return true;
 }
 

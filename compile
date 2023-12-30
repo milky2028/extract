@@ -1,3 +1,5 @@
+rm -rf dist && \
+mkdir dist && \
 emcc \
 -sEXPORT_ES6 \
 -O0 \
