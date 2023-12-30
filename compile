@@ -1,0 +1,11 @@
+emcc \
+-sEXPORT_ES6 \
+-O0 \
+-std=c++17 \
+-I/Users/tgross/Documents/GitHub/libarchive/dist/include \
+-L/Users/tgross/Documents/GitHub/libarchive/dist/lib \
+-larchive \
+-lembind \
+--embind-emit-tsd extract.d.ts \
+./src/main.cpp \
+-o ./dist/extract.js
