@@ -1,1 +1,1 @@
-cd ~/Documents/GitHub/emsdk && source ./emsdk_env.sh && cd ~/Documents/GitHub/extract
+z emsdk && source ./emsdk_env.sh && z extract
