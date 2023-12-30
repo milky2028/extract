@@ -1,0 +1,11 @@
+{
+  "name": "extract",
+  "version": "0.0.1",
+  "description": "Utility using libarchive to extra .zip and .rar archives.",
+  "main": "",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Tyler Gross",
+  "license": "MIT"
+}
