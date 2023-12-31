@@ -60,7 +60,7 @@ auto for_each_entry(archive* read_archive, std::function<void(archive_entry*, st
   }
 }
 
-auto list_files(size_t archive_file_ptr, size_t archive_file_size) {
+auto list_entry_paths(size_t archive_file_ptr, size_t archive_file_size) {
   auto return_code = ARCHIVE_OK;
   archive_entry* entry = nullptr;
 
@@ -100,5 +100,5 @@ EMSCRIPTEN_BINDINGS(module) {
 
   emscripten::function("extract_book", &extract_book, emscripten::allow_raw_pointers());
   emscripten::function("get_buffer", &get_buffer, emscripten::allow_raw_pointers());
-  emscripten::function("list_files", &list_files);
+  emscripten::function("list_entry_paths", &list_entry_paths);
 }
