@@ -9,7 +9,7 @@ export interface stringVector {
 
 export interface MainModule {
   stringVector: {new(): stringVector};
-  extract_book(_0: number, _1: number, _2: number): boolean;
+  extract_all_entries(_0: number, _1: number, _2: number): boolean;
   list_entry_paths(_0: number, _1: number): stringVector;
   get_buffer(_0: number, _1: number): any;
 }

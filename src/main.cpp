@@ -72,7 +72,7 @@ auto list_entry_paths(size_t archive_file_ptr, size_t archive_file_size) {
   return file_paths;
 }
 
-auto extract_book(size_t archive_file_ptr, size_t archive_file_size, size_t on_read_callback_ptr) {
+auto extract_all_entries(size_t archive_file_ptr, size_t archive_file_size, size_t on_read_callback_ptr) {
   auto return_code = ARCHIVE_OK;
   const auto read_archive = get_archive(archive_file_ptr, archive_file_size);
   output_error(read_archive, return_code);
@@ -98,7 +98,7 @@ auto extract_book(size_t archive_file_ptr, size_t archive_file_size, size_t on_r
 EMSCRIPTEN_BINDINGS(module) {
   emscripten::register_vector<std::string>("stringVector");
 
-  emscripten::function("extract_book", &extract_book, emscripten::allow_raw_pointers());
+  emscripten::function("extract_all_entries", &extract_all_entries, emscripten::allow_raw_pointers());
   emscripten::function("get_buffer", &get_buffer, emscripten::allow_raw_pointers());
   emscripten::function("list_entry_paths", &list_entry_paths);
 }
