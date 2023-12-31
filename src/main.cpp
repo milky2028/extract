@@ -67,6 +67,7 @@ auto list_files(size_t archive_file_ptr, size_t archive_file_size) {
   const auto read_archive = get_archive(archive_file_ptr, archive_file_size);
   std::vector<std::string> file_paths = {};
   for_each_entry(read_archive, [&](const auto entry, const auto entry_path) { file_paths.push_back(entry_path); });
+  std::sort(file_paths.begin(), file_paths.end());
 
   return file_paths;
 }
