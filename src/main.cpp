@@ -6,6 +6,11 @@
 #include <string>
 #include <vector>
 
+auto get_file_name_from_path(std::string path) {
+  const auto position = path.rfind("/");
+  return path.substr(position + 1, path.size());
+}
+
 auto to_lower_case(std::string str) {
   std::string new_string = "";
   for (const auto& character : str) {
@@ -53,8 +58,9 @@ auto for_each_entry(archive* read_archive, std::function<void(archive_entry*, st
     }
 
     output_error(read_archive, return_code);
-    std::string entry_path = to_lower_case(archive_entry_pathname(entry));
-    if (!entry_path.starts_with("__macosx") && (entry_path.ends_with(".jpg") || entry_path.ends_with(".png"))) {
+    std::string original_path = to_lower_case(archive_entry_pathname(entry));
+    std::string entry_path = get_file_name_from_path(original_path);
+    if (!original_path.starts_with("__macosx") && (entry_path.ends_with(".jpg") || entry_path.ends_with(".png"))) {
       predicate(entry, entry_path);
     }
   }
