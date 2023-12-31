@@ -5452,6 +5452,29 @@ function dbg(text) {
       });
     };
 
+
+  var __emval_incref = (handle) => {
+      if (handle > 4) {
+        emval_handles.get(handle).refcount += 1;
+      }
+    };
+
+  
+  
+  
+  var requireRegisteredType = (rawType, humanName) => {
+      var impl = registeredTypes[rawType];
+      if (undefined === impl) {
+          throwBindingError(humanName + " has unknown type " + getTypeName(rawType));
+      }
+      return impl;
+    };
+  var __emval_take_value = (type, arg) => {
+      type = requireRegisteredType(type, '_emval_take_value');
+      var v = type['readValueFromPointer'](arg);
+      return Emval.toHandle(v);
+    };
+
   var isLeapYear = (year) => year%4 === 0 && (year%100 !== 0 || year%400 === 0);
   
   var MONTH_DAYS_LEAP_CUMULATIVE = [0,31,60,91,121,152,182,213,244,274,305,335];
@@ -6183,6 +6206,12 @@ var wasmImports = {
   /** @export */
   _embind_register_void: __embind_register_void,
   /** @export */
+  _emval_decref: __emval_decref,
+  /** @export */
+  _emval_incref: __emval_incref,
+  /** @export */
+  _emval_take_value: __emval_take_value,
+  /** @export */
   _localtime_js: __localtime_js,
   /** @export */
   _mktime_js: __mktime_js,
@@ -6217,8 +6246,8 @@ var wasmImports = {
 };
 var wasmExports = createWasm();
 var ___wasm_call_ctors = createExportWrapper('__wasm_call_ctors');
-var ___errno_location = createExportWrapper('__errno_location');
 var _free = Module['_free'] = createExportWrapper('free');
+var ___errno_location = createExportWrapper('__errno_location');
 var _malloc = Module['_malloc'] = createExportWrapper('malloc');
 var ___getTypeName = createExportWrapper('__getTypeName');
 var _fflush = Module['_fflush'] = createExportWrapper('fflush');
@@ -6388,7 +6417,6 @@ var missingLibrarySymbols = [
   'writeStringToMemory',
   'writeAsciiToMemory',
   'getFunctionArgsName',
-  'requireRegisteredType',
   'init_embind',
   'getBasestPointer',
   'registerInheritedInstance',
@@ -6583,6 +6611,7 @@ var unexportedSymbols = [
   'getTypeName',
   'getFunctionName',
   'heap32VectorToArray',
+  'requireRegisteredType',
   'usesDestructorStack',
   'createJsInvoker',
   'UnboundTypeError',
