@@ -45,7 +45,7 @@ auto for_each_entry(archive* read_archive, std::function<void(archive_entry*, st
 
     output_error(read_archive, return_code);
     std::string entry_path = archive_entry_pathname(entry);
-    if (!entry_path.starts_with("__MACOSX")) {
+    if (!entry_path.starts_with("__MACOSX") && (entry_path.ends_with(".jpg") || entry_path.ends_with(".png"))) {
       predicate(entry, entry_path);
     }
   }
