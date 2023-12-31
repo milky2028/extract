@@ -23,10 +23,6 @@ type Extended = {
   UTF8ToString(ptr: number, maxLength?: number): string;
 
   HEAPU8: Uint8Array;
-
-  setValue(ptr: number, value: ArrayLike<number>, type: LLVMStorageType): void;
-  getValue(ptr: number, type: LLVMStorageType): void;
-
   FS: {
     writeFile(path: string, data: File): number;
   };
