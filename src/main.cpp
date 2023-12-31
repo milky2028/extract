@@ -1,9 +1,18 @@
 #include <archive.h>
 #include <archive_entry.h>
+#include <ctype.h>
 #include <emscripten/bind.h>
 #include <stdio.h>
 #include <string>
 #include <vector>
+
+auto to_lower_case(std::string str) {
+  std::string new_string = "";
+  for (const auto& character : str) {
+    new_string.push_back(std::tolower(character));
+  }
+  return new_string;
+}
 
 auto get_buffer(size_t buffer_ptr, size_t buffer_size) {
   const auto ptr = reinterpret_cast<uint8_t*>(buffer_ptr);
@@ -44,8 +53,9 @@ auto for_each_entry(archive* read_archive, std::function<void(archive_entry*, st
     }
 
     output_error(read_archive, return_code);
-    std::string entry_path = archive_entry_pathname(entry);
-    if (!entry_path.starts_with("__MACOSX") && (entry_path.ends_with(".jpg") || entry_path.ends_with(".png"))) {
+    std::string entry_path = to_lower_case(archive_entry_pathname(entry));
+    if (!entry_path.starts_with("__macosx") && (entry_path.ends_with(".jpg") || entry_path.ends_with(".png"))) {
+      printf("%s\n", entry_path.c_str());
       predicate(entry, entry_path);
     }
   }
