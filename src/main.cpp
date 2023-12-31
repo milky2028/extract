@@ -72,22 +72,54 @@ auto list_entry_paths(size_t archive_file_ptr, size_t archive_file_size) {
   return file_paths;
 }
 
+struct buffer_object {
+  void* buffer;
+  size_t ptr;
+  size_t size;
+  std::function<void()> free;
+};
+
+auto read_entry(archive* read_archive, archive_entry* entry) {
+  size_t size = archive_entry_size(entry);
+  void* read_buffer = malloc(size);
+
+  archive_read_data(read_archive, read_buffer, size);
+  const auto ptr = reinterpret_cast<size_t>(read_buffer);
+  return (struct buffer_object){.ptr = ptr, .size = size, .free = [&] { free(read_buffer); }};
+}
+
+auto extract_single_entry(size_t archive_file_ptr,
+                          size_t archive_file_size,
+                          std::string entry_name,
+                          size_t on_found_callback_ptr) {
+  auto return_code = ARCHIVE_OK;
+  const auto read_archive = get_archive(archive_file_ptr, archive_file_size);
+
+  auto called = false;
+  const auto on_found = reinterpret_cast<void (*)(const char* path, size_t ptr, size_t size)>(on_found_callback_ptr);
+  for_each_entry(read_archive, [&](const auto entry, const auto entry_path) {
+    if (entry_path == entry_name) {
+      const auto data = read_entry(read_archive, entry);
+      on_found(entry_path.c_str(), data.ptr, data.size);
+      called = true;
+      data.free();
+    }
+  });
+
+  if (!called) {
+    on_found("not-found", 0, 0);
+  }
+}
+
 auto extract_all_entries(size_t archive_file_ptr, size_t archive_file_size, size_t on_read_callback_ptr) {
   auto return_code = ARCHIVE_OK;
   const auto read_archive = get_archive(archive_file_ptr, archive_file_size);
-  output_error(read_archive, return_code);
 
   const auto on_read = reinterpret_cast<void (*)(const char* path, size_t ptr, size_t size)>(on_read_callback_ptr);
   for_each_entry(read_archive, [&](const auto entry, const auto entry_path) {
-    size_t size = archive_entry_size(entry);
-    void* read_buffer = malloc(size);
-    la_int64_t offset;
-
-    archive_read_data(read_archive, read_buffer, size);
-
-    const auto ptr = reinterpret_cast<size_t>(read_buffer);
-    on_read(entry_path.c_str(), ptr, size);
-    free(read_buffer);
+    const auto data = read_entry(read_archive, entry);
+    on_read(entry_path.c_str(), data.ptr, data.size);
+    data.free();
   });
 
   return_code = archive_read_free(read_archive);
@@ -99,6 +131,7 @@ EMSCRIPTEN_BINDINGS(module) {
   emscripten::register_vector<std::string>("stringVector");
 
   emscripten::function("extract_all_entries", &extract_all_entries, emscripten::allow_raw_pointers());
+  emscripten::function("extract_single_entry", &extract_single_entry, emscripten::allow_raw_pointers());
   emscripten::function("get_buffer", &get_buffer, emscripten::allow_raw_pointers());
   emscripten::function("list_entry_paths", &list_entry_paths);
 }

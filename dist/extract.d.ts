@@ -11,5 +11,6 @@ export interface MainModule {
   stringVector: {new(): stringVector};
   extract_all_entries(_0: number, _1: number, _2: number): boolean;
   list_entry_paths(_0: number, _1: number): stringVector;
+  extract_single_entry(_0: number, _1: number, _2: ArrayBuffer|Uint8Array|Uint8ClampedArray|Int8Array|string, _3: number): void;
   get_buffer(_0: number, _1: number): any;
 }
