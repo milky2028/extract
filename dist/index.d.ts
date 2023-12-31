@@ -1,4 +1,8 @@
+import { MainModule } from "./extract";
+
 type ReadCallback = (path: string, buffer: Uint8Array) => void;
+
+// type Vector =
 
 type LLVMStorageType =
   | "i8"
@@ -20,18 +24,13 @@ type Extended = {
   addFunction(func: Function, types: string): number;
   UTF8ToString(ptr: number, maxLength?: number): string;
 
-  extract_book(
-    file_name:
-      | ArrayBuffer
-      | Uint8Array
-      | Uint8ClampedArray
-      | Int8Array
-      | string,
-    file_ptr: number,
-    file_size: number,
-    read_callback_ptr: number
-  ): boolean;
-  get_buffer(ptr: number, size: number): Uint8Array;
+  // extract_book(
+  //   archive_file_ptr: number,
+  //   archive_file_size: number,
+  //   read_callback_ptr: number
+  // ): boolean;
+  // get_buffer(buffer_ptr: number, buffer_size: number): Uint8Array;
+  // list_files(archive_file_ptr: number, archive_file_size: number): string[];
 
   HEAPU8: Uint8Array;
   FS: {
@@ -39,4 +38,4 @@ type Extended = {
   };
 };
 
-export default function initialize(): Promise<Extended>;
+export default function initialize(): Promise<Extended & MainModule>;
