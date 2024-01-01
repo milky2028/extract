@@ -107,7 +107,7 @@ struct buffer_object {
 };
 
 auto read_entry(archive* read_archive, archive_entry* entry) {
-  size_t size = archive_entry_size(entry);
+  const size_t size = archive_entry_size(entry);
   void* read_buffer = malloc(size);
 
   archive_read_data(read_archive, read_buffer, size);
