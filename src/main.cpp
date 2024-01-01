@@ -77,8 +77,8 @@ auto for_each_entry(archive* read_archive, std::function<void(archive_entry*, st
     }
 
     output_error(read_archive, return_code);
-    std::string original_path = to_lower_case(archive_entry_pathname(entry));
-    std::string entry_path = get_file_name_from_path(original_path);
+    const std::string original_path = to_lower_case(archive_entry_pathname(entry));
+    const std::string entry_path = get_file_name_from_path(original_path);
     if (!original_path.starts_with("__macosx") && (entry_path.ends_with(".jpg") || entry_path.ends_with(".png"))) {
       predicate(entry, entry_path);
     }
