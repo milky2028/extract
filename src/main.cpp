@@ -19,6 +19,25 @@ auto to_lower_case(std::string str) {
   return new_string;
 }
 
+template <typename F>
+F create_function(size_t ptr) {
+  return reinterpret_cast<F>(ptr);
+}
+
+std::vector<std::string>* create_vector_from_ptr(size_t vec) {
+  return reinterpret_cast<std::vector<std::string>*>(vec);
+}
+
+template <typename K, typename V>
+auto get_keys(std::map<K, V> map) {
+  const std::vector<K> keys = {};
+  for (const auto& [key] : map) {
+    keys.push_back(key);
+  }
+
+  return keys;
+}
+
 auto get_buffer(size_t buffer_ptr, size_t buffer_size) {
   const auto ptr = reinterpret_cast<uint8_t*>(buffer_ptr);
   return emscripten::val(emscripten::typed_memory_view<uint8_t>(buffer_size, ptr));
@@ -75,6 +94,8 @@ auto list_entry_paths(size_t archive_file_ptr, size_t archive_file_size) {
   for_each_entry(read_archive, [&](const auto entry, const auto entry_path) { file_paths.push_back(entry_path); });
   std::sort(file_paths.begin(), file_paths.end());
 
+  return_code = archive_read_free(read_archive);
+  output_error(read_archive, return_code);
   return file_paths;
 }
 
@@ -115,6 +136,9 @@ auto extract_single_entry(size_t archive_file_ptr,
   if (!called) {
     on_found("not-found", 0, 0);
   }
+
+  return_code = archive_read_free(read_archive);
+  output_error(read_archive, return_code);
 }
 
 auto extract_all_entries(size_t archive_file_ptr, size_t archive_file_size, size_t on_read_callback_ptr) {
