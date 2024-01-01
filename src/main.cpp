@@ -30,7 +30,7 @@ std::vector<std::string>* create_vector_from_ptr(intptr_t ptr) {
 
 template <typename K, typename V>
 auto get_keys(std::map<K, V> map) {
-  const std::vector<K> keys = {};
+  std::vector<K> keys = {};
   for (const auto& [key, _value] : map) {
     keys.push_back(key);
   }
