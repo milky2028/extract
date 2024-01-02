@@ -5,7 +5,7 @@
             "includePath": [
                 "${workspaceFolder}/**",
                 "/Users/tgross/Documents/GitHub/libarchive/dist/include",
-                "/Users/tgross/Documents/GitHub/emsdk/upstream/emscripten/system/include"
+                "/Users/tgross/Documents/GitHub/emsdk/upstream/emscripten/cache/sysroot/include"
             ],
             "defines": [],
             "macFrameworkPath": [
