@@ -84,7 +84,7 @@ size_t get_entry_size(intptr_t entry_ptr) {
 }
 
 auto entry_is_file(intptr_t entry_ptr) {
-  return archive_entry_filetype(int_to_ptr<archive_entry*>(entry_ptr)) == 3276;
+  return archive_entry_filetype(int_to_ptr<archive_entry*>(entry_ptr)) == 32768;
 }
 
 auto read_entry_data(intptr_t archive_ptr, intptr_t entry_ptr) {
