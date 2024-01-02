@@ -33,6 +33,7 @@ type Extended = {
   // list_files(archive_file_ptr: number, archive_file_size: number): string[];
 
   HEAPU8: Uint8Array;
+  HEAP8: Uint8Array;
   FS: {
     writeFile(path: string, data: File): number;
   };
