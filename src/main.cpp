@@ -44,7 +44,39 @@ auto get_archive(intptr_t archive_file_ptr, intptr_t archive_file_size) {
   return_code = archive_read_open_memory(read_archive, ptr, archive_file_size);
   output_error(read_archive, return_code);
 
-  return read_archive;
+  const auto ptr_to_archive = reinterpret_cast<intptr_t>(read_archive);
+  return ptr_to_archive;
+}
+
+auto list_all_entries(intptr_t archive_file_ptr, intptr_t archive_file_size) {
+  auto return_code = ARCHIVE_OK;
+  const auto ptr_to_archive = get_archive(archive_file_ptr, archive_file_size);
+  const auto read_archive = reinterpret_cast<archive*>(ptr_to_archive);
+
+  std::vector<std::string> entries = {};
+
+  archive_entry* entry = nullptr;
+  for (;;) {
+    return_code = archive_read_next_header(read_archive, &entry);
+
+    if (return_code == ARCHIVE_EOF) {
+      break;
+    }
+    output_error(read_archive, return_code);
+
+    std::string original_path = to_lower_case(archive_entry_pathname(entry));
+    std::string entry_path = get_file_name_from_path(original_path);
+    if (!original_path.starts_with("__macosx") && (entry_path.ends_with(".jpg") || entry_path.ends_with(".png"))) {
+      entries.push_back(entry_path);
+    }
+  }
+
+  std::sort(entries.begin(), entries.end());
+
+  return_code = archive_read_free(read_archive);
+  output_error(read_archive, return_code);
+
+  return entries;
 }
 
 struct buffer_object {
@@ -63,35 +95,48 @@ auto read_entry(archive* read_archive, archive_entry* entry) {
   return (struct buffer_object){.ptr = ptr, .size = size, .free = [&] { free(read_buffer); }};
 }
 
-auto extract_book(intptr_t archive_file_ptr, intptr_t archive_file_size, intptr_t on_read_callback_ptr) {
+auto extract_chunks(intptr_t ptr_to_archive, size_t chunks_to_read, intptr_t on_read_callback_ptr) {
+  const auto read_archive = reinterpret_cast<archive*>(ptr_to_archive);
   auto return_code = ARCHIVE_OK;
-  const auto read_archive = get_archive(archive_file_ptr, archive_file_size);
 
+  auto chunks_read = 0;
+  archive_entry* entry = nullptr;
   for (;;) {
-    archive_entry* entry = nullptr;
     return_code = archive_read_next_header(read_archive, &entry);
     const auto on_read = reinterpret_cast<void (*)(const char*, intptr_t, intptr_t)>(on_read_callback_ptr);
 
-    if (return_code == ARCHIVE_EOF) {
-      on_read("last-read", 0, 0);
+    if (chunks_read == chunks_to_read) {
+      on_read("chunks-exhausted", 0, 0);
       break;
     }
 
+    if (return_code == ARCHIVE_EOF) {
+      on_read("chunks-exhausted", 0, 0);
+
+      return_code = archive_read_free(read_archive);
+      output_error(read_archive, return_code);
+
+      break;
+    }
     output_error(read_archive, return_code);
+
     std::string original_path = to_lower_case(archive_entry_pathname(entry));
     std::string entry_path = get_file_name_from_path(original_path);
     if (!original_path.starts_with("__macosx") && (entry_path.ends_with(".jpg") || entry_path.ends_with(".png"))) {
       const auto file = read_entry(read_archive, entry);
       on_read(entry_path.c_str(), file.ptr, file.size);
+
+      chunks_read++;
       file.free();
     }
   }
-
-  return_code = archive_read_free(read_archive);
-  output_error(read_archive, return_code);
 }
 
 EMSCRIPTEN_BINDINGS(module) {
-  emscripten::function("extract_book", &extract_book, emscripten::allow_raw_pointers());
+  emscripten::register_vector<std::string>("VectorOfStrings");
+
+  emscripten::function("get_archive", &get_archive, emscripten::allow_raw_pointers());
+  emscripten::function("list_all_entries", &list_all_entries, emscripten::allow_raw_pointers());
+  emscripten::function("extract_chunks", &extract_chunks, emscripten::allow_raw_pointers());
   emscripten::function("get_buffer", &get_buffer, emscripten::allow_raw_pointers());
 }
