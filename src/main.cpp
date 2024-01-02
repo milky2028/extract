@@ -83,6 +83,10 @@ auto read_entry_data(intptr_t archive_ptr, intptr_t entry_ptr) {
   return ptr_to_int(read_buffer);
 }
 
+auto free_buffer(intptr_t buffer_ptr) {
+  free(int_to_ptr<void*>(buffer_ptr));
+}
+
 EMSCRIPTEN_BINDINGS(module) {
   emscripten::function("get_buffer", &get_buffer, emscripten::allow_raw_pointers());
 
@@ -90,5 +94,6 @@ EMSCRIPTEN_BINDINGS(module) {
   emscripten::function("close_archive", &close_archive, emscripten::allow_raw_pointers());
   emscripten::function("get_next_entry", &get_next_entry, emscripten::allow_raw_pointers());
   emscripten::function("read_entry_data", &read_entry_data, emscripten::allow_raw_pointers());
+  emscripten::function("free_buffer", &free_buffer, emscripten::allow_raw_pointers());
   emscripten::function("skip_extraction", &skip_extraction, emscripten::allow_raw_pointers());
 }
