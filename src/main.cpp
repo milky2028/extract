@@ -26,6 +26,10 @@ auto get_buffer(intptr_t buffer_ptr, size_t buffer_size) {
   return emscripten::val(emscripten::typed_memory_view<uint8_t>(buffer_size, int_to_ptr<uint8_t*>(buffer_ptr)));
 }
 
+auto free_buffer(intptr_t buffer_ptr) {
+  free(int_to_ptr<void*>(buffer_ptr));
+}
+
 auto open_archive(intptr_t archive_file_ptr, intptr_t archive_file_size) {
   auto return_code = ARCHIVE_OK;
   const auto arch = archive_read_new();
@@ -94,10 +98,6 @@ auto read_entry_data(intptr_t archive_ptr, intptr_t entry_ptr) {
 
   archive_read_data(int_to_ptr<archive*>(archive_ptr), read_buffer, size);
   return ptr_to_int(read_buffer);
-}
-
-auto free_buffer(intptr_t buffer_ptr) {
-  free(int_to_ptr<void*>(buffer_ptr));
 }
 
 EMSCRIPTEN_BINDINGS(module) {
