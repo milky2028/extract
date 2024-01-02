@@ -1,10 +1,8 @@
 #include <archive.h>
 #include <archive_entry.h>
-#include <ctype.h>
 #include <emscripten/bind.h>
 #include <stdio.h>
 #include <string>
-#include <vector>
 
 auto output_error(archive* active_archive, int return_code) {
   if (return_code < ARCHIVE_OK) {
