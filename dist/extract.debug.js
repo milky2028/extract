@@ -815,78 +815,6 @@ var warnOnce = text => {
  }
 };
 
-/** @constructor */ function ExceptionInfo(excPtr) {
- this.excPtr = excPtr;
- this.ptr = excPtr - 24;
- this.set_type = function(type) {
-  HEAPU32[(((this.ptr) + (4)) >>> 2) >>> 0] = type;
- };
- this.get_type = function() {
-  return HEAPU32[(((this.ptr) + (4)) >>> 2) >>> 0];
- };
- this.set_destructor = function(destructor) {
-  HEAPU32[(((this.ptr) + (8)) >>> 2) >>> 0] = destructor;
- };
- this.get_destructor = function() {
-  return HEAPU32[(((this.ptr) + (8)) >>> 2) >>> 0];
- };
- this.set_caught = function(caught) {
-  caught = caught ? 1 : 0;
-  HEAP8[(((this.ptr) + (12)) >>> 0) >>> 0] = caught;
- };
- this.get_caught = function() {
-  return HEAP8[(((this.ptr) + (12)) >>> 0) >>> 0] != 0;
- };
- this.set_rethrown = function(rethrown) {
-  rethrown = rethrown ? 1 : 0;
-  HEAP8[(((this.ptr) + (13)) >>> 0) >>> 0] = rethrown;
- };
- this.get_rethrown = function() {
-  return HEAP8[(((this.ptr) + (13)) >>> 0) >>> 0] != 0;
- };
- this.init = function(type, destructor) {
-  this.set_adjusted_ptr(0);
-  this.set_type(type);
-  this.set_destructor(destructor);
- };
- this.set_adjusted_ptr = function(adjustedPtr) {
-  HEAPU32[(((this.ptr) + (16)) >>> 2) >>> 0] = adjustedPtr;
- };
- this.get_adjusted_ptr = function() {
-  return HEAPU32[(((this.ptr) + (16)) >>> 2) >>> 0];
- };
- this.get_exception_ptr = function() {
-  var isPointer = ___cxa_is_pointer_type(this.get_type());
-  if (isPointer) {
-   return HEAPU32[((this.excPtr) >>> 2) >>> 0];
-  }
-  var adjusted = this.get_adjusted_ptr();
-  if (adjusted !== 0) return adjusted;
-  return this.excPtr;
- };
-}
-
-var exceptionLast = 0;
-
-var uncaughtExceptionCount = 0;
-
-var convertI32PairToI53Checked = (lo, hi) => {
- assert(lo == (lo >>> 0) || lo == (lo | 0));
- assert(hi === (hi | 0));
- return ((hi + 2097152) >>> 0 < 4194305 - !!lo) ? (lo >>> 0) + hi * 4294967296 : NaN;
-};
-
-function ___cxa_throw(ptr, type, destructor) {
- ptr >>>= 0;
- type >>>= 0;
- destructor >>>= 0;
- var info = new ExceptionInfo(ptr);
- info.init(type, destructor);
- exceptionLast = ptr;
- uncaughtExceptionCount++;
- assert(false, "Exception thrown, but exception catching is not enabled. Compile with -sNO_DISABLE_EXCEPTION_CATCHING or -sEXCEPTION_CATCHING_ALLOWED=[..] to catch.");
-}
-
 var PATH = {
  isAbs: path => path.charAt(0) === "/",
  splitPath: filename => {
@@ -3559,6 +3487,12 @@ var setErrNo = value => {
  return value;
 };
 
+var convertI32PairToI53Checked = (lo, hi) => {
+ assert(lo == (lo >>> 0) || lo == (lo | 0));
+ assert(hi === (hi | 0));
+ return ((hi + 2097152) >>> 0 < 4194305 - !!lo) ? (lo >>> 0) + hi * 4294967296 : NaN;
+};
+
 function ___syscall_fcntl64(fd, cmd, varargs) {
  varargs >>>= 0;
  SYSCALLS.varargs = varargs;
@@ -3978,937 +3912,6 @@ var GenericWireTypeSize = 8;
  });
 }
 
-var shallowCopyInternalPointer = o => ({
- count: o.count,
- deleteScheduled: o.deleteScheduled,
- preservePointerOnDelete: o.preservePointerOnDelete,
- ptr: o.ptr,
- ptrType: o.ptrType,
- smartPtr: o.smartPtr,
- smartPtrType: o.smartPtrType
-});
-
-var throwInstanceAlreadyDeleted = obj => {
- function getInstanceTypeName(handle) {
-  return handle.$$.ptrType.registeredClass.name;
- }
- throwBindingError(getInstanceTypeName(obj) + " instance already deleted");
-};
-
-var finalizationRegistry = false;
-
-var detachFinalizer = handle => {};
-
-var runDestructor = $$ => {
- if ($$.smartPtr) {
-  $$.smartPtrType.rawDestructor($$.smartPtr);
- } else {
-  $$.ptrType.registeredClass.rawDestructor($$.ptr);
- }
-};
-
-var releaseClassHandle = $$ => {
- $$.count.value -= 1;
- var toDelete = 0 === $$.count.value;
- if (toDelete) {
-  runDestructor($$);
- }
-};
-
-var downcastPointer = (ptr, ptrClass, desiredClass) => {
- if (ptrClass === desiredClass) {
-  return ptr;
- }
- if (undefined === desiredClass.baseClass) {
-  return null;
- }
- var rv = downcastPointer(ptr, ptrClass, desiredClass.baseClass);
- if (rv === null) {
-  return null;
- }
- return desiredClass.downcast(rv);
-};
-
-var registeredPointers = {};
-
-var getInheritedInstanceCount = () => Object.keys(registeredInstances).length;
-
-var getLiveInheritedInstances = () => {
- var rv = [];
- for (var k in registeredInstances) {
-  if (registeredInstances.hasOwnProperty(k)) {
-   rv.push(registeredInstances[k]);
-  }
- }
- return rv;
-};
-
-var deletionQueue = [];
-
-var flushPendingDeletes = () => {
- while (deletionQueue.length) {
-  var obj = deletionQueue.pop();
-  obj.$$.deleteScheduled = false;
-  obj["delete"]();
- }
-};
-
-var delayFunction;
-
-var setDelayFunction = fn => {
- delayFunction = fn;
- if (deletionQueue.length && delayFunction) {
-  delayFunction(flushPendingDeletes);
- }
-};
-
-var init_embind = () => {
- Module["getInheritedInstanceCount"] = getInheritedInstanceCount;
- Module["getLiveInheritedInstances"] = getLiveInheritedInstances;
- Module["flushPendingDeletes"] = flushPendingDeletes;
- Module["setDelayFunction"] = setDelayFunction;
-};
-
-var registeredInstances = {};
-
-var getBasestPointer = (class_, ptr) => {
- if (ptr === undefined) {
-  throwBindingError("ptr should not be undefined");
- }
- while (class_.baseClass) {
-  ptr = class_.upcast(ptr);
-  class_ = class_.baseClass;
- }
- return ptr;
-};
-
-var getInheritedInstance = (class_, ptr) => {
- ptr = getBasestPointer(class_, ptr);
- return registeredInstances[ptr];
-};
-
-var makeClassHandle = (prototype, record) => {
- if (!record.ptrType || !record.ptr) {
-  throwInternalError("makeClassHandle requires ptr and ptrType");
- }
- var hasSmartPtrType = !!record.smartPtrType;
- var hasSmartPtr = !!record.smartPtr;
- if (hasSmartPtrType !== hasSmartPtr) {
-  throwInternalError("Both smartPtrType and smartPtr must be specified");
- }
- record.count = {
-  value: 1
- };
- return attachFinalizer(Object.create(prototype, {
-  $$: {
-   value: record,
-   writable: true
-  }
- }));
-};
-
-/** @suppress {globalThis} */ function RegisteredPointer_fromWireType(ptr) {
- var rawPointer = this.getPointee(ptr);
- if (!rawPointer) {
-  this.destructor(ptr);
-  return null;
- }
- var registeredInstance = getInheritedInstance(this.registeredClass, rawPointer);
- if (undefined !== registeredInstance) {
-  if (0 === registeredInstance.$$.count.value) {
-   registeredInstance.$$.ptr = rawPointer;
-   registeredInstance.$$.smartPtr = ptr;
-   return registeredInstance["clone"]();
-  } else {
-   var rv = registeredInstance["clone"]();
-   this.destructor(ptr);
-   return rv;
-  }
- }
- function makeDefaultHandle() {
-  if (this.isSmartPointer) {
-   return makeClassHandle(this.registeredClass.instancePrototype, {
-    ptrType: this.pointeeType,
-    ptr: rawPointer,
-    smartPtrType: this,
-    smartPtr: ptr
-   });
-  } else {
-   return makeClassHandle(this.registeredClass.instancePrototype, {
-    ptrType: this,
-    ptr: ptr
-   });
-  }
- }
- var actualType = this.registeredClass.getActualType(rawPointer);
- var registeredPointerRecord = registeredPointers[actualType];
- if (!registeredPointerRecord) {
-  return makeDefaultHandle.call(this);
- }
- var toType;
- if (this.isConst) {
-  toType = registeredPointerRecord.constPointerType;
- } else {
-  toType = registeredPointerRecord.pointerType;
- }
- var dp = downcastPointer(rawPointer, this.registeredClass, toType.registeredClass);
- if (dp === null) {
-  return makeDefaultHandle.call(this);
- }
- if (this.isSmartPointer) {
-  return makeClassHandle(toType.registeredClass.instancePrototype, {
-   ptrType: toType,
-   ptr: dp,
-   smartPtrType: this,
-   smartPtr: ptr
-  });
- } else {
-  return makeClassHandle(toType.registeredClass.instancePrototype, {
-   ptrType: toType,
-   ptr: dp
-  });
- }
-}
-
-var attachFinalizer = handle => {
- if ("undefined" === typeof FinalizationRegistry) {
-  attachFinalizer = handle => handle;
-  return handle;
- }
- finalizationRegistry = new FinalizationRegistry(info => {
-  console.warn(info.leakWarning.stack.replace(/^Error: /, ""));
-  releaseClassHandle(info.$$);
- });
- attachFinalizer = handle => {
-  var $$ = handle.$$;
-  var hasSmartPtr = !!$$.smartPtr;
-  if (hasSmartPtr) {
-   var info = {
-    $$: $$
-   };
-   var cls = $$.ptrType.registeredClass;
-   info.leakWarning = new Error(`Embind found a leaked C++ instance ${cls.name} <${ptrToString($$.ptr)}>.\n` + "We'll free it automatically in this case, but this functionality is not reliable across various environments.\n" + "Make sure to invoke .delete() manually once you're done with the instance instead.\n" + "Originally allocated");
-   if ("captureStackTrace" in Error) {
-    Error.captureStackTrace(info.leakWarning, RegisteredPointer_fromWireType);
-   }
-   finalizationRegistry.register(handle, info, handle);
-  }
-  return handle;
- };
- detachFinalizer = handle => finalizationRegistry.unregister(handle);
- return attachFinalizer(handle);
-};
-
-var init_ClassHandle = () => {
- Object.assign(ClassHandle.prototype, {
-  "isAliasOf"(other) {
-   if (!(this instanceof ClassHandle)) {
-    return false;
-   }
-   if (!(other instanceof ClassHandle)) {
-    return false;
-   }
-   var leftClass = this.$$.ptrType.registeredClass;
-   var left = this.$$.ptr;
-   other.$$ = /** @type {Object} */ (other.$$);
-   var rightClass = other.$$.ptrType.registeredClass;
-   var right = other.$$.ptr;
-   while (leftClass.baseClass) {
-    left = leftClass.upcast(left);
-    leftClass = leftClass.baseClass;
-   }
-   while (rightClass.baseClass) {
-    right = rightClass.upcast(right);
-    rightClass = rightClass.baseClass;
-   }
-   return leftClass === rightClass && left === right;
-  },
-  "clone"() {
-   if (!this.$$.ptr) {
-    throwInstanceAlreadyDeleted(this);
-   }
-   if (this.$$.preservePointerOnDelete) {
-    this.$$.count.value += 1;
-    return this;
-   } else {
-    var clone = attachFinalizer(Object.create(Object.getPrototypeOf(this), {
-     $$: {
-      value: shallowCopyInternalPointer(this.$$)
-     }
-    }));
-    clone.$$.count.value += 1;
-    clone.$$.deleteScheduled = false;
-    return clone;
-   }
-  },
-  "delete"() {
-   if (!this.$$.ptr) {
-    throwInstanceAlreadyDeleted(this);
-   }
-   if (this.$$.deleteScheduled && !this.$$.preservePointerOnDelete) {
-    throwBindingError("Object already scheduled for deletion");
-   }
-   detachFinalizer(this);
-   releaseClassHandle(this.$$);
-   if (!this.$$.preservePointerOnDelete) {
-    this.$$.smartPtr = undefined;
-    this.$$.ptr = undefined;
-   }
-  },
-  "isDeleted"() {
-   return !this.$$.ptr;
-  },
-  "deleteLater"() {
-   if (!this.$$.ptr) {
-    throwInstanceAlreadyDeleted(this);
-   }
-   if (this.$$.deleteScheduled && !this.$$.preservePointerOnDelete) {
-    throwBindingError("Object already scheduled for deletion");
-   }
-   deletionQueue.push(this);
-   if (deletionQueue.length === 1 && delayFunction) {
-    delayFunction(flushPendingDeletes);
-   }
-   this.$$.deleteScheduled = true;
-   return this;
-  }
- });
-};
-
-/** @constructor */ function ClassHandle() {}
-
-var createNamedFunction = (name, body) => Object.defineProperty(body, "name", {
- value: name
-});
-
-var ensureOverloadTable = (proto, methodName, humanName) => {
- if (undefined === proto[methodName].overloadTable) {
-  var prevFunc = proto[methodName];
-  proto[methodName] = function() {
-   if (!proto[methodName].overloadTable.hasOwnProperty(arguments.length)) {
-    throwBindingError(`Function '${humanName}' called with an invalid number of arguments (${arguments.length}) - expects one of (${proto[methodName].overloadTable})!`);
-   }
-   return proto[methodName].overloadTable[arguments.length].apply(this, arguments);
-  };
-  proto[methodName].overloadTable = [];
-  proto[methodName].overloadTable[prevFunc.argCount] = prevFunc;
- }
-};
-
-/** @param {number=} numArguments */ var exposePublicSymbol = (name, value, numArguments) => {
- if (Module.hasOwnProperty(name)) {
-  if (undefined === numArguments || (undefined !== Module[name].overloadTable && undefined !== Module[name].overloadTable[numArguments])) {
-   throwBindingError(`Cannot register public name '${name}' twice`);
-  }
-  ensureOverloadTable(Module, name, name);
-  if (Module.hasOwnProperty(numArguments)) {
-   throwBindingError(`Cannot register multiple overloads of a function with the same number of arguments (${numArguments})!`);
-  }
-  Module[name].overloadTable[numArguments] = value;
- } else {
-  Module[name] = value;
-  if (undefined !== numArguments) {
-   Module[name].numArguments = numArguments;
-  }
- }
-};
-
-var char_0 = 48;
-
-var char_9 = 57;
-
-var makeLegalFunctionName = name => {
- if (undefined === name) {
-  return "_unknown";
- }
- name = name.replace(/[^a-zA-Z0-9_]/g, "$");
- var f = name.charCodeAt(0);
- if (f >= char_0 && f <= char_9) {
-  return `_${name}`;
- }
- return name;
-};
-
-/** @constructor */ function RegisteredClass(name, constructor, instancePrototype, rawDestructor, baseClass, getActualType, upcast, downcast) {
- this.name = name;
- this.constructor = constructor;
- this.instancePrototype = instancePrototype;
- this.rawDestructor = rawDestructor;
- this.baseClass = baseClass;
- this.getActualType = getActualType;
- this.upcast = upcast;
- this.downcast = downcast;
- this.pureVirtualFunctions = [];
-}
-
-var upcastPointer = (ptr, ptrClass, desiredClass) => {
- while (ptrClass !== desiredClass) {
-  if (!ptrClass.upcast) {
-   throwBindingError(`Expected null or instance of ${desiredClass.name}, got an instance of ${ptrClass.name}`);
-  }
-  ptr = ptrClass.upcast(ptr);
-  ptrClass = ptrClass.baseClass;
- }
- return ptr;
-};
-
-/** @suppress {globalThis} */ function constNoSmartPtrRawPointerToWireType(destructors, handle) {
- if (handle === null) {
-  if (this.isReference) {
-   throwBindingError(`null is not a valid ${this.name}`);
-  }
-  return 0;
- }
- if (!handle.$$) {
-  throwBindingError(`Cannot pass "${embindRepr(handle)}" as a ${this.name}`);
- }
- if (!handle.$$.ptr) {
-  throwBindingError(`Cannot pass deleted object as a pointer of type ${this.name}`);
- }
- var handleClass = handle.$$.ptrType.registeredClass;
- var ptr = upcastPointer(handle.$$.ptr, handleClass, this.registeredClass);
- return ptr;
-}
-
-/** @suppress {globalThis} */ function genericPointerToWireType(destructors, handle) {
- var ptr;
- if (handle === null) {
-  if (this.isReference) {
-   throwBindingError(`null is not a valid ${this.name}`);
-  }
-  if (this.isSmartPointer) {
-   ptr = this.rawConstructor();
-   if (destructors !== null) {
-    destructors.push(this.rawDestructor, ptr);
-   }
-   return ptr;
-  } else {
-   return 0;
-  }
- }
- if (!handle || !handle.$$) {
-  throwBindingError(`Cannot pass "${embindRepr(handle)}" as a ${this.name}`);
- }
- if (!handle.$$.ptr) {
-  throwBindingError(`Cannot pass deleted object as a pointer of type ${this.name}`);
- }
- if (!this.isConst && handle.$$.ptrType.isConst) {
-  throwBindingError(`Cannot convert argument of type ${(handle.$$.smartPtrType ? handle.$$.smartPtrType.name : handle.$$.ptrType.name)} to parameter type ${this.name}`);
- }
- var handleClass = handle.$$.ptrType.registeredClass;
- ptr = upcastPointer(handle.$$.ptr, handleClass, this.registeredClass);
- if (this.isSmartPointer) {
-  if (undefined === handle.$$.smartPtr) {
-   throwBindingError("Passing raw pointer to smart pointer is illegal");
-  }
-  switch (this.sharingPolicy) {
-  case 0:
-   if (handle.$$.smartPtrType === this) {
-    ptr = handle.$$.smartPtr;
-   } else {
-    throwBindingError(`Cannot convert argument of type ${(handle.$$.smartPtrType ? handle.$$.smartPtrType.name : handle.$$.ptrType.name)} to parameter type ${this.name}`);
-   }
-   break;
-
-  case 1:
-   ptr = handle.$$.smartPtr;
-   break;
-
-  case 2:
-   if (handle.$$.smartPtrType === this) {
-    ptr = handle.$$.smartPtr;
-   } else {
-    var clonedHandle = handle["clone"]();
-    ptr = this.rawShare(ptr, Emval.toHandle(() => clonedHandle["delete"]()));
-    if (destructors !== null) {
-     destructors.push(this.rawDestructor, ptr);
-    }
-   }
-   break;
-
-  default:
-   throwBindingError("Unsupporting sharing policy");
-  }
- }
- return ptr;
-}
-
-/** @suppress {globalThis} */ function nonConstNoSmartPtrRawPointerToWireType(destructors, handle) {
- if (handle === null) {
-  if (this.isReference) {
-   throwBindingError(`null is not a valid ${this.name}`);
-  }
-  return 0;
- }
- if (!handle.$$) {
-  throwBindingError(`Cannot pass "${embindRepr(handle)}" as a ${this.name}`);
- }
- if (!handle.$$.ptr) {
-  throwBindingError(`Cannot pass deleted object as a pointer of type ${this.name}`);
- }
- if (handle.$$.ptrType.isConst) {
-  throwBindingError(`Cannot convert argument of type ${handle.$$.ptrType.name} to parameter type ${this.name}`);
- }
- var handleClass = handle.$$.ptrType.registeredClass;
- var ptr = upcastPointer(handle.$$.ptr, handleClass, this.registeredClass);
- return ptr;
-}
-
-/** @suppress {globalThis} */ function readPointer(pointer) {
- return this["fromWireType"](HEAPU32[((pointer) >>> 2) >>> 0]);
-}
-
-var init_RegisteredPointer = () => {
- Object.assign(RegisteredPointer.prototype, {
-  getPointee(ptr) {
-   if (this.rawGetPointee) {
-    ptr = this.rawGetPointee(ptr);
-   }
-   return ptr;
-  },
-  destructor(ptr) {
-   this.rawDestructor?.(ptr);
-  },
-  "argPackAdvance": GenericWireTypeSize,
-  "readValueFromPointer": readPointer,
-  "deleteObject"(handle) {
-   if (handle !== null) {
-    handle["delete"]();
-   }
-  },
-  "fromWireType": RegisteredPointer_fromWireType
- });
-};
-
-/** @constructor
-      @param {*=} pointeeType,
-      @param {*=} sharingPolicy,
-      @param {*=} rawGetPointee,
-      @param {*=} rawConstructor,
-      @param {*=} rawShare,
-      @param {*=} rawDestructor,
-       */ function RegisteredPointer(name, registeredClass, isReference, isConst,  isSmartPointer, pointeeType, sharingPolicy, rawGetPointee, rawConstructor, rawShare, rawDestructor) {
- this.name = name;
- this.registeredClass = registeredClass;
- this.isReference = isReference;
- this.isConst = isConst;
- this.isSmartPointer = isSmartPointer;
- this.pointeeType = pointeeType;
- this.sharingPolicy = sharingPolicy;
- this.rawGetPointee = rawGetPointee;
- this.rawConstructor = rawConstructor;
- this.rawShare = rawShare;
- this.rawDestructor = rawDestructor;
- if (!isSmartPointer && registeredClass.baseClass === undefined) {
-  if (isConst) {
-   this["toWireType"] = constNoSmartPtrRawPointerToWireType;
-   this.destructorFunction = null;
-  } else {
-   this["toWireType"] = nonConstNoSmartPtrRawPointerToWireType;
-   this.destructorFunction = null;
-  }
- } else {
-  this["toWireType"] = genericPointerToWireType;
- }
-}
-
-/** @param {number=} numArguments */ var replacePublicSymbol = (name, value, numArguments) => {
- if (!Module.hasOwnProperty(name)) {
-  throwInternalError("Replacing nonexistant public symbol");
- }
- if (undefined !== Module[name].overloadTable && undefined !== numArguments) {
-  Module[name].overloadTable[numArguments] = value;
- } else {
-  Module[name] = value;
-  Module[name].argCount = numArguments;
- }
-};
-
-var dynCallLegacy = (sig, ptr, args) => {
- assert(("dynCall_" + sig) in Module, `bad function pointer type - dynCall function not found for sig '${sig}'`);
- if (args?.length) {
-  assert(args.length === sig.substring(1).replace(/j/g, "--").length);
- } else {
-  assert(sig.length == 1);
- }
- var f = Module["dynCall_" + sig];
- return args && args.length ? f.apply(null, [ ptr ].concat(args)) : f.call(null, ptr);
-};
-
-var wasmTableMirror = [];
-
-var wasmTable;
-
-var getWasmTableEntry = funcPtr => {
- var func = wasmTableMirror[funcPtr];
- if (!func) {
-  if (funcPtr >= wasmTableMirror.length) wasmTableMirror.length = funcPtr + 1;
-  wasmTableMirror[funcPtr] = func = wasmTable.get(funcPtr);
- }
- assert(wasmTable.get(funcPtr) == func, "JavaScript-side Wasm function table mirror is out of date!");
- return func;
-};
-
-/** @param {Object=} args */ var dynCall = (sig, ptr, args) => {
- if (sig.includes("j")) {
-  return dynCallLegacy(sig, ptr, args);
- }
- assert(getWasmTableEntry(ptr), `missing table entry in dynCall: ${ptr}`);
- var rtn = getWasmTableEntry(ptr).apply(null, args);
- return rtn;
-};
-
-var getDynCaller = (sig, ptr) => {
- assert(sig.includes("j") || sig.includes("p"), "getDynCaller should only be called with i64 sigs");
- var argCache = [];
- return function() {
-  argCache.length = 0;
-  Object.assign(argCache, arguments);
-  return dynCall(sig, ptr, argCache);
- };
-};
-
-var embind__requireFunction = (signature, rawFunction) => {
- signature = readLatin1String(signature);
- function makeDynCaller() {
-  if (signature.includes("j")) {
-   return getDynCaller(signature, rawFunction);
-  }
-  return getWasmTableEntry(rawFunction);
- }
- var fp = makeDynCaller();
- if (typeof fp != "function") {
-  throwBindingError(`unknown function pointer with signature ${signature}: ${rawFunction}`);
- }
- return fp;
-};
-
-var extendError = (baseErrorType, errorName) => {
- var errorClass = createNamedFunction(errorName, function(message) {
-  this.name = errorName;
-  this.message = message;
-  var stack = (new Error(message)).stack;
-  if (stack !== undefined) {
-   this.stack = this.toString() + "\n" + stack.replace(/^Error(:[^\n]*)?\n/, "");
-  }
- });
- errorClass.prototype = Object.create(baseErrorType.prototype);
- errorClass.prototype.constructor = errorClass;
- errorClass.prototype.toString = function() {
-  if (this.message === undefined) {
-   return this.name;
-  } else {
-   return `${this.name}: ${this.message}`;
-  }
- };
- return errorClass;
-};
-
-var UnboundTypeError;
-
-var getTypeName = type => {
- var ptr = ___getTypeName(type);
- var rv = readLatin1String(ptr);
- _free(ptr);
- return rv;
-};
-
-var throwUnboundTypeError = (message, types) => {
- var unboundTypes = [];
- var seen = {};
- function visit(type) {
-  if (seen[type]) {
-   return;
-  }
-  if (registeredTypes[type]) {
-   return;
-  }
-  if (typeDependencies[type]) {
-   typeDependencies[type].forEach(visit);
-   return;
-  }
-  unboundTypes.push(type);
-  seen[type] = true;
- }
- types.forEach(visit);
- throw new UnboundTypeError(`${message}: ` + unboundTypes.map(getTypeName).join([ ", " ]));
-};
-
-function __embind_register_class(rawType, rawPointerType, rawConstPointerType, baseClassRawType, getActualTypeSignature, getActualType, upcastSignature, upcast, downcastSignature, downcast, name, destructorSignature, rawDestructor) {
- rawType >>>= 0;
- rawPointerType >>>= 0;
- rawConstPointerType >>>= 0;
- baseClassRawType >>>= 0;
- getActualTypeSignature >>>= 0;
- getActualType >>>= 0;
- upcastSignature >>>= 0;
- upcast >>>= 0;
- downcastSignature >>>= 0;
- downcast >>>= 0;
- name >>>= 0;
- destructorSignature >>>= 0;
- rawDestructor >>>= 0;
- name = readLatin1String(name);
- getActualType = embind__requireFunction(getActualTypeSignature, getActualType);
- upcast &&= embind__requireFunction(upcastSignature, upcast);
- downcast &&= embind__requireFunction(downcastSignature, downcast);
- rawDestructor = embind__requireFunction(destructorSignature, rawDestructor);
- var legalFunctionName = makeLegalFunctionName(name);
- exposePublicSymbol(legalFunctionName, function() {
-  throwUnboundTypeError(`Cannot construct ${name} due to unbound types`, [ baseClassRawType ]);
- });
- whenDependentTypesAreResolved([ rawType, rawPointerType, rawConstPointerType ], baseClassRawType ? [ baseClassRawType ] : [], function(base) {
-  base = base[0];
-  var baseClass;
-  var basePrototype;
-  if (baseClassRawType) {
-   baseClass = base.registeredClass;
-   basePrototype = baseClass.instancePrototype;
-  } else {
-   basePrototype = ClassHandle.prototype;
-  }
-  var constructor = createNamedFunction(name, function() {
-   if (Object.getPrototypeOf(this) !== instancePrototype) {
-    throw new BindingError("Use 'new' to construct " + name);
-   }
-   if (undefined === registeredClass.constructor_body) {
-    throw new BindingError(name + " has no accessible constructor");
-   }
-   var body = registeredClass.constructor_body[arguments.length];
-   if (undefined === body) {
-    throw new BindingError(`Tried to invoke ctor of ${name} with invalid number of parameters (${arguments.length}) - expected (${Object.keys(registeredClass.constructor_body).toString()}) parameters instead!`);
-   }
-   return body.apply(this, arguments);
-  });
-  var instancePrototype = Object.create(basePrototype, {
-   constructor: {
-    value: constructor
-   }
-  });
-  constructor.prototype = instancePrototype;
-  var registeredClass = new RegisteredClass(name, constructor, instancePrototype, rawDestructor, baseClass, getActualType, upcast, downcast);
-  if (registeredClass.baseClass) {
-   registeredClass.baseClass.__derivedClasses ??= [];
-   registeredClass.baseClass.__derivedClasses.push(registeredClass);
-  }
-  var referenceConverter = new RegisteredPointer(name, registeredClass, true, false, false);
-  var pointerConverter = new RegisteredPointer(name + "*", registeredClass, false, false, false);
-  var constPointerConverter = new RegisteredPointer(name + " const*", registeredClass, false, true, false);
-  registeredPointers[rawType] = {
-   pointerType: pointerConverter,
-   constPointerType: constPointerConverter
-  };
-  replacePublicSymbol(legalFunctionName, constructor);
-  return [ referenceConverter, pointerConverter, constPointerConverter ];
- });
-}
-
-var heap32VectorToArray = (count, firstElement) => {
- var array = [];
- for (var i = 0; i < count; i++) {
-  array.push(HEAPU32[(((firstElement) + (i * 4)) >>> 2) >>> 0]);
- }
- return array;
-};
-
-var runDestructors = destructors => {
- while (destructors.length) {
-  var ptr = destructors.pop();
-  var del = destructors.pop();
-  del(ptr);
- }
-};
-
-function usesDestructorStack(argTypes) {
- for (var i = 1; i < argTypes.length; ++i) {
-  if (argTypes[i] !== null && argTypes[i].destructorFunction === undefined) {
-   return true;
-  }
- }
- return false;
-}
-
-function newFunc(constructor, argumentList) {
- if (!(constructor instanceof Function)) {
-  throw new TypeError(`new_ called with constructor type ${typeof (constructor)} which is not a function`);
- }
- /*
-       * Previously, the following line was just:
-       *   function dummy() {};
-       * Unfortunately, Chrome was preserving 'dummy' as the object's name, even
-       * though at creation, the 'dummy' has the correct constructor name.  Thus,
-       * objects created with IMVU.new would show up in the debugger as 'dummy',
-       * which isn't very helpful.  Using IMVU.createNamedFunction addresses the
-       * issue.  Doublely-unfortunately, there's no way to write a test for this
-       * behavior.  -NRD 2013.02.22
-       */ var dummy = createNamedFunction(constructor.name || "unknownFunctionName", function() {});
- dummy.prototype = constructor.prototype;
- var obj = new dummy;
- var r = constructor.apply(obj, argumentList);
- return (r instanceof Object) ? r : obj;
-}
-
-function createJsInvoker(humanName, argTypes, isClassMethodFunc, returns, isAsync) {
- var needsDestructorStack = usesDestructorStack(argTypes);
- var argCount = argTypes.length;
- var argsList = "";
- var argsListWired = "";
- for (var i = 0; i < argCount - 2; ++i) {
-  argsList += (i !== 0 ? ", " : "") + "arg" + i;
-  argsListWired += (i !== 0 ? ", " : "") + "arg" + i + "Wired";
- }
- var invokerFnBody = `\n        return function (${argsList}) {\n        if (arguments.length !== ${argCount - 2}) {\n          throwBindingError('function ${humanName} called with ' + arguments.length + ' arguments, expected ${argCount - 2}');\n        }`;
- if (needsDestructorStack) {
-  invokerFnBody += "var destructors = [];\n";
- }
- var dtorStack = needsDestructorStack ? "destructors" : "null";
- var args1 = [ "throwBindingError", "invoker", "fn", "runDestructors", "retType", "classParam" ];
- if (isClassMethodFunc) {
-  invokerFnBody += "var thisWired = classParam['toWireType'](" + dtorStack + ", this);\n";
- }
- for (var i = 0; i < argCount - 2; ++i) {
-  invokerFnBody += "var arg" + i + "Wired = argType" + i + "['toWireType'](" + dtorStack + ", arg" + i + "); // " + argTypes[i + 2].name + "\n";
-  args1.push("argType" + i);
- }
- if (isClassMethodFunc) {
-  argsListWired = "thisWired" + (argsListWired.length > 0 ? ", " : "") + argsListWired;
- }
- invokerFnBody += (returns || isAsync ? "var rv = " : "") + "invoker(fn" + (argsListWired.length > 0 ? ", " : "") + argsListWired + ");\n";
- if (needsDestructorStack) {
-  invokerFnBody += "runDestructors(destructors);\n";
- } else {
-  for (var i = isClassMethodFunc ? 1 : 2; i < argTypes.length; ++i) {
-   var paramName = (i === 1 ? "thisWired" : ("arg" + (i - 2) + "Wired"));
-   if (argTypes[i].destructorFunction !== null) {
-    invokerFnBody += paramName + "_dtor(" + paramName + "); // " + argTypes[i].name + "\n";
-    args1.push(paramName + "_dtor");
-   }
-  }
- }
- if (returns) {
-  invokerFnBody += "var ret = retType['fromWireType'](rv);\n" + "return ret;\n";
- } else {}
- invokerFnBody += "}\n";
- invokerFnBody = `if (arguments.length !== ${args1.length}){ throw new Error("${humanName} Expected ${args1.length} closure arguments " + arguments.length + " given."); }\n${invokerFnBody}`;
- return [ args1, invokerFnBody ];
-}
-
-function craftInvokerFunction(humanName, argTypes, classType, cppInvokerFunc, cppTargetFunc, /** boolean= */ isAsync) {
- var argCount = argTypes.length;
- if (argCount < 2) {
-  throwBindingError("argTypes array size mismatch! Must at least get return value and 'this' types!");
- }
- assert(!isAsync, "Async bindings are only supported with JSPI.");
- var isClassMethodFunc = (argTypes[1] !== null && classType !== null);
- var needsDestructorStack = usesDestructorStack(argTypes);
- var returns = (argTypes[0].name !== "void");
- var closureArgs = [ throwBindingError, cppInvokerFunc, cppTargetFunc, runDestructors, argTypes[0], argTypes[1] ];
- for (var i = 0; i < argCount - 2; ++i) {
-  closureArgs.push(argTypes[i + 2]);
- }
- if (!needsDestructorStack) {
-  for (var i = isClassMethodFunc ? 1 : 2; i < argTypes.length; ++i) {
-   if (argTypes[i].destructorFunction !== null) {
-    closureArgs.push(argTypes[i].destructorFunction);
-   }
-  }
- }
- let [args, invokerFnBody] = createJsInvoker(humanName, argTypes, isClassMethodFunc, returns, isAsync);
- args.push(invokerFnBody);
- var invokerFn = newFunc(Function, args).apply(null, closureArgs);
- return createNamedFunction(humanName, invokerFn);
-}
-
-function __embind_register_class_constructor(rawClassType, argCount, rawArgTypesAddr, invokerSignature, invoker, rawConstructor) {
- rawClassType >>>= 0;
- rawArgTypesAddr >>>= 0;
- invokerSignature >>>= 0;
- invoker >>>= 0;
- rawConstructor >>>= 0;
- assert(argCount > 0);
- var rawArgTypes = heap32VectorToArray(argCount, rawArgTypesAddr);
- invoker = embind__requireFunction(invokerSignature, invoker);
- var args = [ rawConstructor ];
- var destructors = [];
- whenDependentTypesAreResolved([], [ rawClassType ], function(classType) {
-  classType = classType[0];
-  var humanName = `constructor ${classType.name}`;
-  if (undefined === classType.registeredClass.constructor_body) {
-   classType.registeredClass.constructor_body = [];
-  }
-  if (undefined !== classType.registeredClass.constructor_body[argCount - 1]) {
-   throw new BindingError(`Cannot register multiple constructors with identical number of parameters (${argCount - 1}) for class '${classType.name}'! Overload resolution is currently only performed using the parameter count, not actual type info!`);
-  }
-  classType.registeredClass.constructor_body[argCount - 1] = () => {
-   throwUnboundTypeError(`Cannot construct ${classType.name} due to unbound types`, rawArgTypes);
-  };
-  whenDependentTypesAreResolved([], rawArgTypes, argTypes => {
-   argTypes.splice(1, 0, null);
-   classType.registeredClass.constructor_body[argCount - 1] = craftInvokerFunction(humanName, argTypes, null, invoker, rawConstructor);
-   return [];
-  });
-  return [];
- });
-}
-
-var getFunctionName = signature => {
- signature = signature.trim();
- const argsIndex = signature.indexOf("(");
- if (argsIndex !== -1) {
-  assert(signature[signature.length - 1] == ")", "Parentheses for argument names should match.");
-  return signature.substr(0, argsIndex);
- } else {
-  return signature;
- }
-};
-
-function __embind_register_class_function(rawClassType, methodName, argCount, rawArgTypesAddr, invokerSignature, rawInvoker, context, isPureVirtual, isAsync) {
- rawClassType >>>= 0;
- methodName >>>= 0;
- rawArgTypesAddr >>>= 0;
- invokerSignature >>>= 0;
- rawInvoker >>>= 0;
- context >>>= 0;
- var rawArgTypes = heap32VectorToArray(argCount, rawArgTypesAddr);
- methodName = readLatin1String(methodName);
- methodName = getFunctionName(methodName);
- rawInvoker = embind__requireFunction(invokerSignature, rawInvoker);
- whenDependentTypesAreResolved([], [ rawClassType ], function(classType) {
-  classType = classType[0];
-  var humanName = `${classType.name}.${methodName}`;
-  if (methodName.startsWith("@@")) {
-   methodName = Symbol[methodName.substring(2)];
-  }
-  if (isPureVirtual) {
-   classType.registeredClass.pureVirtualFunctions.push(methodName);
-  }
-  function unboundTypesHandler() {
-   throwUnboundTypeError(`Cannot call ${humanName} due to unbound types`, rawArgTypes);
-  }
-  var proto = classType.registeredClass.instancePrototype;
-  var method = proto[methodName];
-  if (undefined === method || (undefined === method.overloadTable && method.className !== classType.name && method.argCount === argCount - 2)) {
-   unboundTypesHandler.argCount = argCount - 2;
-   unboundTypesHandler.className = classType.name;
-   proto[methodName] = unboundTypesHandler;
-  } else {
-   ensureOverloadTable(proto, methodName, humanName);
-   proto[methodName].overloadTable[argCount - 2] = unboundTypesHandler;
-  }
-  whenDependentTypesAreResolved([], rawArgTypes, function(argTypes) {
-   var memberFunction = craftInvokerFunction(humanName, argTypes, classType, rawInvoker, context, isAsync);
-   if (undefined === proto[methodName].overloadTable) {
-    memberFunction.argCount = argCount - 2;
-    proto[methodName] = memberFunction;
-   } else {
-    proto[methodName].overloadTable[argCount - 2] = memberFunction;
-   }
-   return [];
-  });
-  return [];
- });
-}
-
 function handleAllocatorInit() {
  Object.assign(HandleAllocator.prototype, /** @lends {HandleAllocator.prototype} */ {
   get(id) {
@@ -5072,6 +4075,291 @@ var __embind_register_float = function(rawType, name, size) {
  });
 };
 
+var createNamedFunction = (name, body) => Object.defineProperty(body, "name", {
+ value: name
+});
+
+var runDestructors = destructors => {
+ while (destructors.length) {
+  var ptr = destructors.pop();
+  var del = destructors.pop();
+  del(ptr);
+ }
+};
+
+function usesDestructorStack(argTypes) {
+ for (var i = 1; i < argTypes.length; ++i) {
+  if (argTypes[i] !== null && argTypes[i].destructorFunction === undefined) {
+   return true;
+  }
+ }
+ return false;
+}
+
+function newFunc(constructor, argumentList) {
+ if (!(constructor instanceof Function)) {
+  throw new TypeError(`new_ called with constructor type ${typeof (constructor)} which is not a function`);
+ }
+ /*
+       * Previously, the following line was just:
+       *   function dummy() {};
+       * Unfortunately, Chrome was preserving 'dummy' as the object's name, even
+       * though at creation, the 'dummy' has the correct constructor name.  Thus,
+       * objects created with IMVU.new would show up in the debugger as 'dummy',
+       * which isn't very helpful.  Using IMVU.createNamedFunction addresses the
+       * issue.  Doublely-unfortunately, there's no way to write a test for this
+       * behavior.  -NRD 2013.02.22
+       */ var dummy = createNamedFunction(constructor.name || "unknownFunctionName", function() {});
+ dummy.prototype = constructor.prototype;
+ var obj = new dummy;
+ var r = constructor.apply(obj, argumentList);
+ return (r instanceof Object) ? r : obj;
+}
+
+function createJsInvoker(humanName, argTypes, isClassMethodFunc, returns, isAsync) {
+ var needsDestructorStack = usesDestructorStack(argTypes);
+ var argCount = argTypes.length;
+ var argsList = "";
+ var argsListWired = "";
+ for (var i = 0; i < argCount - 2; ++i) {
+  argsList += (i !== 0 ? ", " : "") + "arg" + i;
+  argsListWired += (i !== 0 ? ", " : "") + "arg" + i + "Wired";
+ }
+ var invokerFnBody = `\n        return function (${argsList}) {\n        if (arguments.length !== ${argCount - 2}) {\n          throwBindingError('function ${humanName} called with ' + arguments.length + ' arguments, expected ${argCount - 2}');\n        }`;
+ if (needsDestructorStack) {
+  invokerFnBody += "var destructors = [];\n";
+ }
+ var dtorStack = needsDestructorStack ? "destructors" : "null";
+ var args1 = [ "throwBindingError", "invoker", "fn", "runDestructors", "retType", "classParam" ];
+ if (isClassMethodFunc) {
+  invokerFnBody += "var thisWired = classParam['toWireType'](" + dtorStack + ", this);\n";
+ }
+ for (var i = 0; i < argCount - 2; ++i) {
+  invokerFnBody += "var arg" + i + "Wired = argType" + i + "['toWireType'](" + dtorStack + ", arg" + i + "); // " + argTypes[i + 2].name + "\n";
+  args1.push("argType" + i);
+ }
+ if (isClassMethodFunc) {
+  argsListWired = "thisWired" + (argsListWired.length > 0 ? ", " : "") + argsListWired;
+ }
+ invokerFnBody += (returns || isAsync ? "var rv = " : "") + "invoker(fn" + (argsListWired.length > 0 ? ", " : "") + argsListWired + ");\n";
+ if (needsDestructorStack) {
+  invokerFnBody += "runDestructors(destructors);\n";
+ } else {
+  for (var i = isClassMethodFunc ? 1 : 2; i < argTypes.length; ++i) {
+   var paramName = (i === 1 ? "thisWired" : ("arg" + (i - 2) + "Wired"));
+   if (argTypes[i].destructorFunction !== null) {
+    invokerFnBody += paramName + "_dtor(" + paramName + "); // " + argTypes[i].name + "\n";
+    args1.push(paramName + "_dtor");
+   }
+  }
+ }
+ if (returns) {
+  invokerFnBody += "var ret = retType['fromWireType'](rv);\n" + "return ret;\n";
+ } else {}
+ invokerFnBody += "}\n";
+ invokerFnBody = `if (arguments.length !== ${args1.length}){ throw new Error("${humanName} Expected ${args1.length} closure arguments " + arguments.length + " given."); }\n${invokerFnBody}`;
+ return [ args1, invokerFnBody ];
+}
+
+function craftInvokerFunction(humanName, argTypes, classType, cppInvokerFunc, cppTargetFunc, /** boolean= */ isAsync) {
+ var argCount = argTypes.length;
+ if (argCount < 2) {
+  throwBindingError("argTypes array size mismatch! Must at least get return value and 'this' types!");
+ }
+ assert(!isAsync, "Async bindings are only supported with JSPI.");
+ var isClassMethodFunc = (argTypes[1] !== null && classType !== null);
+ var needsDestructorStack = usesDestructorStack(argTypes);
+ var returns = (argTypes[0].name !== "void");
+ var closureArgs = [ throwBindingError, cppInvokerFunc, cppTargetFunc, runDestructors, argTypes[0], argTypes[1] ];
+ for (var i = 0; i < argCount - 2; ++i) {
+  closureArgs.push(argTypes[i + 2]);
+ }
+ if (!needsDestructorStack) {
+  for (var i = isClassMethodFunc ? 1 : 2; i < argTypes.length; ++i) {
+   if (argTypes[i].destructorFunction !== null) {
+    closureArgs.push(argTypes[i].destructorFunction);
+   }
+  }
+ }
+ let [args, invokerFnBody] = createJsInvoker(humanName, argTypes, isClassMethodFunc, returns, isAsync);
+ args.push(invokerFnBody);
+ var invokerFn = newFunc(Function, args).apply(null, closureArgs);
+ return createNamedFunction(humanName, invokerFn);
+}
+
+var ensureOverloadTable = (proto, methodName, humanName) => {
+ if (undefined === proto[methodName].overloadTable) {
+  var prevFunc = proto[methodName];
+  proto[methodName] = function() {
+   if (!proto[methodName].overloadTable.hasOwnProperty(arguments.length)) {
+    throwBindingError(`Function '${humanName}' called with an invalid number of arguments (${arguments.length}) - expects one of (${proto[methodName].overloadTable})!`);
+   }
+   return proto[methodName].overloadTable[arguments.length].apply(this, arguments);
+  };
+  proto[methodName].overloadTable = [];
+  proto[methodName].overloadTable[prevFunc.argCount] = prevFunc;
+ }
+};
+
+/** @param {number=} numArguments */ var exposePublicSymbol = (name, value, numArguments) => {
+ if (Module.hasOwnProperty(name)) {
+  if (undefined === numArguments || (undefined !== Module[name].overloadTable && undefined !== Module[name].overloadTable[numArguments])) {
+   throwBindingError(`Cannot register public name '${name}' twice`);
+  }
+  ensureOverloadTable(Module, name, name);
+  if (Module.hasOwnProperty(numArguments)) {
+   throwBindingError(`Cannot register multiple overloads of a function with the same number of arguments (${numArguments})!`);
+  }
+  Module[name].overloadTable[numArguments] = value;
+ } else {
+  Module[name] = value;
+  if (undefined !== numArguments) {
+   Module[name].numArguments = numArguments;
+  }
+ }
+};
+
+var heap32VectorToArray = (count, firstElement) => {
+ var array = [];
+ for (var i = 0; i < count; i++) {
+  array.push(HEAPU32[(((firstElement) + (i * 4)) >>> 2) >>> 0]);
+ }
+ return array;
+};
+
+/** @param {number=} numArguments */ var replacePublicSymbol = (name, value, numArguments) => {
+ if (!Module.hasOwnProperty(name)) {
+  throwInternalError("Replacing nonexistant public symbol");
+ }
+ if (undefined !== Module[name].overloadTable && undefined !== numArguments) {
+  Module[name].overloadTable[numArguments] = value;
+ } else {
+  Module[name] = value;
+  Module[name].argCount = numArguments;
+ }
+};
+
+var dynCallLegacy = (sig, ptr, args) => {
+ assert(("dynCall_" + sig) in Module, `bad function pointer type - dynCall function not found for sig '${sig}'`);
+ if (args?.length) {
+  assert(args.length === sig.substring(1).replace(/j/g, "--").length);
+ } else {
+  assert(sig.length == 1);
+ }
+ var f = Module["dynCall_" + sig];
+ return args && args.length ? f.apply(null, [ ptr ].concat(args)) : f.call(null, ptr);
+};
+
+var wasmTableMirror = [];
+
+var wasmTable;
+
+var getWasmTableEntry = funcPtr => {
+ var func = wasmTableMirror[funcPtr];
+ if (!func) {
+  if (funcPtr >= wasmTableMirror.length) wasmTableMirror.length = funcPtr + 1;
+  wasmTableMirror[funcPtr] = func = wasmTable.get(funcPtr);
+ }
+ assert(wasmTable.get(funcPtr) == func, "JavaScript-side Wasm function table mirror is out of date!");
+ return func;
+};
+
+/** @param {Object=} args */ var dynCall = (sig, ptr, args) => {
+ if (sig.includes("j")) {
+  return dynCallLegacy(sig, ptr, args);
+ }
+ assert(getWasmTableEntry(ptr), `missing table entry in dynCall: ${ptr}`);
+ var rtn = getWasmTableEntry(ptr).apply(null, args);
+ return rtn;
+};
+
+var getDynCaller = (sig, ptr) => {
+ assert(sig.includes("j") || sig.includes("p"), "getDynCaller should only be called with i64 sigs");
+ var argCache = [];
+ return function() {
+  argCache.length = 0;
+  Object.assign(argCache, arguments);
+  return dynCall(sig, ptr, argCache);
+ };
+};
+
+var embind__requireFunction = (signature, rawFunction) => {
+ signature = readLatin1String(signature);
+ function makeDynCaller() {
+  if (signature.includes("j")) {
+   return getDynCaller(signature, rawFunction);
+  }
+  return getWasmTableEntry(rawFunction);
+ }
+ var fp = makeDynCaller();
+ if (typeof fp != "function") {
+  throwBindingError(`unknown function pointer with signature ${signature}: ${rawFunction}`);
+ }
+ return fp;
+};
+
+var extendError = (baseErrorType, errorName) => {
+ var errorClass = createNamedFunction(errorName, function(message) {
+  this.name = errorName;
+  this.message = message;
+  var stack = (new Error(message)).stack;
+  if (stack !== undefined) {
+   this.stack = this.toString() + "\n" + stack.replace(/^Error(:[^\n]*)?\n/, "");
+  }
+ });
+ errorClass.prototype = Object.create(baseErrorType.prototype);
+ errorClass.prototype.constructor = errorClass;
+ errorClass.prototype.toString = function() {
+  if (this.message === undefined) {
+   return this.name;
+  } else {
+   return `${this.name}: ${this.message}`;
+  }
+ };
+ return errorClass;
+};
+
+var UnboundTypeError;
+
+var getTypeName = type => {
+ var ptr = ___getTypeName(type);
+ var rv = readLatin1String(ptr);
+ _free(ptr);
+ return rv;
+};
+
+var throwUnboundTypeError = (message, types) => {
+ var unboundTypes = [];
+ var seen = {};
+ function visit(type) {
+  if (seen[type]) {
+   return;
+  }
+  if (registeredTypes[type]) {
+   return;
+  }
+  if (typeDependencies[type]) {
+   typeDependencies[type].forEach(visit);
+   return;
+  }
+  unboundTypes.push(type);
+  seen[type] = true;
+ }
+ types.forEach(visit);
+ throw new UnboundTypeError(`${message}: ` + unboundTypes.map(getTypeName).join([ ", " ]));
+};
+
+var getFunctionName = signature => {
+ signature = signature.trim();
+ const argsIndex = signature.indexOf("(");
+ if (argsIndex !== -1) {
+  assert(signature[signature.length - 1] == ")", "Parentheses for argument names should match.");
+  return signature.substr(0, argsIndex);
+ } else {
+  return signature;
+ }
+};
+
 function __embind_register_function(name, argCount, rawArgTypesAddr, signature, rawInvoker, fn, isAsync) {
  name >>>= 0;
  rawArgTypesAddr >>>= 0;
@@ -5171,6 +4459,10 @@ function __embind_register_memory_view(rawType, dataTypeIndex, name) {
  }, {
   ignoreDuplicateRegistrations: true
  });
+}
+
+/** @suppress {globalThis} */ function readPointer(pointer) {
+ return this["fromWireType"](HEAPU32[((pointer) >>> 2) >>> 0]);
 }
 
 var stringToUTF8 = (str, outPtr, maxBytesToWrite) => {
@@ -6020,24 +5312,17 @@ InternalError = Module["InternalError"] = class InternalError extends Error {
  }
 };
 
-init_ClassHandle();
-
-init_embind();
-
-init_RegisteredPointer();
-
-UnboundTypeError = Module["UnboundTypeError"] = extendError(Error, "UnboundTypeError");
-
 handleAllocatorInit();
 
 init_emval();
+
+UnboundTypeError = Module["UnboundTypeError"] = extendError(Error, "UnboundTypeError");
 
 function checkIncomingModuleAPI() {
  ignoredModuleProp("fetchSettings");
 }
 
 var wasmImports = {
- /** @export */ __cxa_throw: ___cxa_throw,
  /** @export */ __syscall_dup: ___syscall_dup,
  /** @export */ __syscall_dup3: ___syscall_dup3,
  /** @export */ __syscall_fcntl64: ___syscall_fcntl64,
@@ -6045,9 +5330,6 @@ var wasmImports = {
  /** @export */ __syscall_poll: ___syscall_poll,
  /** @export */ _embind_register_bigint: __embind_register_bigint,
  /** @export */ _embind_register_bool: __embind_register_bool,
- /** @export */ _embind_register_class: __embind_register_class,
- /** @export */ _embind_register_class_constructor: __embind_register_class_constructor,
- /** @export */ _embind_register_class_function: __embind_register_class_function,
  /** @export */ _embind_register_emval: __embind_register_emval,
  /** @export */ _embind_register_float: __embind_register_float,
  /** @export */ _embind_register_function: __embind_register_function,
@@ -6138,11 +5420,11 @@ Module["addFunction"] = addFunction;
 
 Module["UTF8ToString"] = UTF8ToString;
 
-var missingLibrarySymbols = [ "writeI53ToI64", "writeI53ToI64Clamped", "writeI53ToI64Signaling", "writeI53ToU64Clamped", "writeI53ToU64Signaling", "readI53FromI64", "readI53FromU64", "convertI32PairToI53", "convertU32PairToI53", "arraySum", "addDays", "inetPton4", "inetNtop4", "inetPton6", "inetNtop6", "readSockaddr", "writeSockaddr", "getHostByName", "getCallstack", "emscriptenLog", "convertPCtoSourceLocation", "readEmAsmArgs", "jstoi_q", "jstoi_s", "listenOnce", "autoResumeAudioContext", "handleException", "runtimeKeepalivePush", "runtimeKeepalivePop", "callUserCallback", "maybeExit", "asmjsMangle", "getNativeTypeSize", "STACK_SIZE", "STACK_ALIGN", "POINTER_SIZE", "ASSERTIONS", "getCFunc", "ccall", "cwrap", "removeFunction", "reallyNegative", "unSign", "strLen", "reSign", "formatString", "intArrayToString", "AsciiToString", "stringToUTF8OnStack", "writeArrayToMemory", "registerKeyEventCallback", "maybeCStringToJsString", "findEventTarget", "findCanvasEventTarget", "getBoundingClientRect", "fillMouseEventData", "registerMouseEventCallback", "registerWheelEventCallback", "registerUiEventCallback", "registerFocusEventCallback", "fillDeviceOrientationEventData", "registerDeviceOrientationEventCallback", "fillDeviceMotionEventData", "registerDeviceMotionEventCallback", "screenOrientation", "fillOrientationChangeEventData", "registerOrientationChangeEventCallback", "fillFullscreenChangeEventData", "registerFullscreenChangeEventCallback", "JSEvents_requestFullscreen", "JSEvents_resizeCanvasForFullscreen", "registerRestoreOldStyle", "hideEverythingExceptGivenElement", "restoreHiddenElements", "setLetterbox", "softFullscreenResizeWebGLRenderTarget", "doRequestFullscreen", "fillPointerlockChangeEventData", "registerPointerlockChangeEventCallback", "registerPointerlockErrorEventCallback", "requestPointerLock", "fillVisibilityChangeEventData", "registerVisibilityChangeEventCallback", "registerTouchEventCallback", "fillGamepadEventData", "registerGamepadEventCallback", "disableGamepadApiIfItThrows", "registerBeforeUnloadEventCallback", "fillBatteryEventData", "battery", "registerBatteryEventCallback", "setCanvasElementSize", "getCanvasElementSize", "jsStackTrace", "stackTrace", "checkWasiClock", "wasiRightsToMuslOFlags", "wasiOFlagsToMuslOFlags", "createDyncallWrapper", "safeSetTimeout", "setImmediateWrapped", "clearImmediateWrapped", "polyfillSetImmediate", "getPromise", "makePromise", "idsToPromises", "makePromiseCallback", "findMatchingCatch", "Browser_asyncPrepareDataCounter", "setMainLoop", "getSocketFromFD", "getSocketAddress", "FS_unlink", "FS_mkdirTree", "_setNetworkCallback", "heapObjectForWebGLType", "heapAccessShiftForWebGLHeap", "webgl_enable_ANGLE_instanced_arrays", "webgl_enable_OES_vertex_array_object", "webgl_enable_WEBGL_draw_buffers", "webgl_enable_WEBGL_multi_draw", "emscriptenWebGLGet", "computeUnpackAlignedImageSize", "colorChannelsInGlTextureFormat", "emscriptenWebGLGetTexPixelData", "__glGenObject", "emscriptenWebGLGetUniform", "webglGetUniformLocation", "webglPrepareUniformLocationsBeforeFirstUse", "webglGetLeftBracePos", "emscriptenWebGLGetVertexAttrib", "__glGetActiveAttribOrUniform", "writeGLArray", "registerWebGlEventCallback", "runAndAbortIfError", "SDL_unicode", "SDL_ttfContext", "SDL_audio", "ALLOC_NORMAL", "ALLOC_STACK", "allocate", "writeStringToMemory", "writeAsciiToMemory", "getFunctionArgsName", "registerInheritedInstance", "unregisterInheritedInstance", "enumReadValueFromPointer", "validateThis", "getStringOrSymbol", "emval_get_global", "emval_returnValue", "emval_lookupTypes", "emval_addMethodCaller" ];
+var missingLibrarySymbols = [ "writeI53ToI64", "writeI53ToI64Clamped", "writeI53ToI64Signaling", "writeI53ToU64Clamped", "writeI53ToU64Signaling", "readI53FromI64", "readI53FromU64", "convertI32PairToI53", "convertU32PairToI53", "arraySum", "addDays", "inetPton4", "inetNtop4", "inetPton6", "inetNtop6", "readSockaddr", "writeSockaddr", "getHostByName", "getCallstack", "emscriptenLog", "convertPCtoSourceLocation", "readEmAsmArgs", "jstoi_q", "jstoi_s", "listenOnce", "autoResumeAudioContext", "handleException", "runtimeKeepalivePush", "runtimeKeepalivePop", "callUserCallback", "maybeExit", "asmjsMangle", "getNativeTypeSize", "STACK_SIZE", "STACK_ALIGN", "POINTER_SIZE", "ASSERTIONS", "getCFunc", "ccall", "cwrap", "removeFunction", "reallyNegative", "unSign", "strLen", "reSign", "formatString", "intArrayToString", "AsciiToString", "stringToUTF8OnStack", "writeArrayToMemory", "registerKeyEventCallback", "maybeCStringToJsString", "findEventTarget", "findCanvasEventTarget", "getBoundingClientRect", "fillMouseEventData", "registerMouseEventCallback", "registerWheelEventCallback", "registerUiEventCallback", "registerFocusEventCallback", "fillDeviceOrientationEventData", "registerDeviceOrientationEventCallback", "fillDeviceMotionEventData", "registerDeviceMotionEventCallback", "screenOrientation", "fillOrientationChangeEventData", "registerOrientationChangeEventCallback", "fillFullscreenChangeEventData", "registerFullscreenChangeEventCallback", "JSEvents_requestFullscreen", "JSEvents_resizeCanvasForFullscreen", "registerRestoreOldStyle", "hideEverythingExceptGivenElement", "restoreHiddenElements", "setLetterbox", "softFullscreenResizeWebGLRenderTarget", "doRequestFullscreen", "fillPointerlockChangeEventData", "registerPointerlockChangeEventCallback", "registerPointerlockErrorEventCallback", "requestPointerLock", "fillVisibilityChangeEventData", "registerVisibilityChangeEventCallback", "registerTouchEventCallback", "fillGamepadEventData", "registerGamepadEventCallback", "disableGamepadApiIfItThrows", "registerBeforeUnloadEventCallback", "fillBatteryEventData", "battery", "registerBatteryEventCallback", "setCanvasElementSize", "getCanvasElementSize", "jsStackTrace", "stackTrace", "checkWasiClock", "wasiRightsToMuslOFlags", "wasiOFlagsToMuslOFlags", "createDyncallWrapper", "safeSetTimeout", "setImmediateWrapped", "clearImmediateWrapped", "polyfillSetImmediate", "getPromise", "makePromise", "idsToPromises", "makePromiseCallback", "ExceptionInfo", "findMatchingCatch", "Browser_asyncPrepareDataCounter", "setMainLoop", "getSocketFromFD", "getSocketAddress", "FS_unlink", "FS_mkdirTree", "_setNetworkCallback", "heapObjectForWebGLType", "heapAccessShiftForWebGLHeap", "webgl_enable_ANGLE_instanced_arrays", "webgl_enable_OES_vertex_array_object", "webgl_enable_WEBGL_draw_buffers", "webgl_enable_WEBGL_multi_draw", "emscriptenWebGLGet", "computeUnpackAlignedImageSize", "colorChannelsInGlTextureFormat", "emscriptenWebGLGetTexPixelData", "__glGenObject", "emscriptenWebGLGetUniform", "webglGetUniformLocation", "webglPrepareUniformLocationsBeforeFirstUse", "webglGetLeftBracePos", "emscriptenWebGLGetVertexAttrib", "__glGetActiveAttribOrUniform", "writeGLArray", "registerWebGlEventCallback", "runAndAbortIfError", "SDL_unicode", "SDL_ttfContext", "SDL_audio", "ALLOC_NORMAL", "ALLOC_STACK", "allocate", "writeStringToMemory", "writeAsciiToMemory", "getFunctionArgsName", "init_embind", "getBasestPointer", "registerInheritedInstance", "unregisterInheritedInstance", "getInheritedInstance", "getInheritedInstanceCount", "getLiveInheritedInstances", "enumReadValueFromPointer", "genericPointerToWireType", "constNoSmartPtrRawPointerToWireType", "nonConstNoSmartPtrRawPointerToWireType", "init_RegisteredPointer", "RegisteredPointer", "RegisteredPointer_fromWireType", "runDestructor", "releaseClassHandle", "detachFinalizer", "attachFinalizer", "makeClassHandle", "init_ClassHandle", "ClassHandle", "throwInstanceAlreadyDeleted", "flushPendingDeletes", "setDelayFunction", "RegisteredClass", "shallowCopyInternalPointer", "downcastPointer", "upcastPointer", "validateThis", "char_0", "char_9", "makeLegalFunctionName", "getStringOrSymbol", "emval_get_global", "emval_returnValue", "emval_lookupTypes", "emval_addMethodCaller" ];
 
 missingLibrarySymbols.forEach(missingLibrarySymbol);
 
-var unexportedSymbols = [ "run", "addOnPreRun", "addOnInit", "addOnPreMain", "addOnExit", "addOnPostRun", "addRunDependency", "removeRunDependency", "FS_createFolder", "FS_createPath", "FS_createLazyFile", "FS_createLink", "FS_createDevice", "FS_readFile", "out", "err", "callMain", "abort", "wasmMemory", "wasmExports", "stackAlloc", "stackSave", "stackRestore", "getTempRet0", "setTempRet0", "writeStackCookie", "checkStackCookie", "convertI32PairToI53Checked", "ptrToString", "zeroMemory", "exitJS", "getHeapMax", "growMemory", "ENV", "MONTH_DAYS_REGULAR", "MONTH_DAYS_LEAP", "MONTH_DAYS_REGULAR_CUMULATIVE", "MONTH_DAYS_LEAP_CUMULATIVE", "isLeapYear", "ydayFromDate", "ERRNO_CODES", "ERRNO_MESSAGES", "setErrNo", "DNS", "Protocols", "Sockets", "initRandomFill", "randomFill", "timers", "warnOnce", "UNWIND_CACHE", "readEmAsmArgsArray", "getExecutableName", "dynCallLegacy", "getDynCaller", "dynCall", "keepRuntimeAlive", "asyncLoad", "alignMemory", "mmapAlloc", "handleAllocatorInit", "HandleAllocator", "wasmTable", "noExitRuntime", "uleb128Encode", "sigToWasmTypes", "generateFuncType", "convertJsFunctionToWasm", "freeTableIndexes", "functionsInTableMap", "getEmptyTableSlot", "updateTableMap", "getFunctionAddress", "setValue", "getValue", "PATH", "PATH_FS", "UTF8Decoder", "UTF8ArrayToString", "stringToUTF8Array", "stringToUTF8", "lengthBytesUTF8", "intArrayFromString", "stringToAscii", "UTF16Decoder", "UTF16ToString", "stringToUTF16", "lengthBytesUTF16", "UTF32ToString", "stringToUTF32", "lengthBytesUTF32", "stringToNewUTF8", "JSEvents", "specialHTMLTargets", "currentFullscreenStrategy", "restoreOldWindowedStyle", "demangle", "demangleAll", "ExitStatus", "getEnvStrings", "doReadv", "doWritev", "promiseMap", "uncaughtExceptionCount", "exceptionLast", "exceptionCaught", "ExceptionInfo", "Browser", "wget", "SYSCALLS", "preloadPlugins", "FS_createPreloadedFile", "FS_modeStringToFlags", "FS_getMode", "FS_stdin_getChar_buffer", "FS_stdin_getChar", "FS", "FS_createDataFile", "MEMFS", "TTY", "PIPEFS", "SOCKFS", "tempFixedLengthArray", "miniTempWebGLFloatBuffers", "miniTempWebGLIntBuffers", "GL", "emscripten_webgl_power_preferences", "AL", "GLUT", "EGL", "GLEW", "IDBStore", "SDL", "SDL_gfx", "allocateUTF8", "allocateUTF8OnStack", "InternalError", "BindingError", "throwInternalError", "throwBindingError", "registeredTypes", "awaitingDependencies", "typeDependencies", "tupleRegistrations", "structRegistrations", "sharedRegisterType", "whenDependentTypesAreResolved", "embind_charCodes", "embind_init_charCodes", "readLatin1String", "getTypeName", "getFunctionName", "heap32VectorToArray", "requireRegisteredType", "usesDestructorStack", "createJsInvoker", "UnboundTypeError", "PureVirtualError", "GenericWireTypeSize", "init_embind", "throwUnboundTypeError", "ensureOverloadTable", "exposePublicSymbol", "replacePublicSymbol", "extendError", "createNamedFunction", "embindRepr", "registeredInstances", "getBasestPointer", "getInheritedInstance", "getInheritedInstanceCount", "getLiveInheritedInstances", "registeredPointers", "registerType", "integerReadValueFromPointer", "floatReadValueFromPointer", "simpleReadValueFromPointer", "readPointer", "runDestructors", "newFunc", "craftInvokerFunction", "embind__requireFunction", "genericPointerToWireType", "constNoSmartPtrRawPointerToWireType", "nonConstNoSmartPtrRawPointerToWireType", "init_RegisteredPointer", "RegisteredPointer", "RegisteredPointer_fromWireType", "runDestructor", "releaseClassHandle", "finalizationRegistry", "detachFinalizer_deps", "detachFinalizer", "attachFinalizer", "makeClassHandle", "init_ClassHandle", "ClassHandle", "throwInstanceAlreadyDeleted", "deletionQueue", "flushPendingDeletes", "delayFunction", "setDelayFunction", "RegisteredClass", "shallowCopyInternalPointer", "downcastPointer", "upcastPointer", "char_0", "char_9", "makeLegalFunctionName", "emval_handles", "emval_symbols", "init_emval", "count_emval_handles", "Emval", "emval_methodCallers", "reflectConstruct" ];
+var unexportedSymbols = [ "run", "addOnPreRun", "addOnInit", "addOnPreMain", "addOnExit", "addOnPostRun", "addRunDependency", "removeRunDependency", "FS_createFolder", "FS_createPath", "FS_createLazyFile", "FS_createLink", "FS_createDevice", "FS_readFile", "out", "err", "callMain", "abort", "wasmMemory", "wasmExports", "stackAlloc", "stackSave", "stackRestore", "getTempRet0", "setTempRet0", "writeStackCookie", "checkStackCookie", "convertI32PairToI53Checked", "ptrToString", "zeroMemory", "exitJS", "getHeapMax", "growMemory", "ENV", "MONTH_DAYS_REGULAR", "MONTH_DAYS_LEAP", "MONTH_DAYS_REGULAR_CUMULATIVE", "MONTH_DAYS_LEAP_CUMULATIVE", "isLeapYear", "ydayFromDate", "ERRNO_CODES", "ERRNO_MESSAGES", "setErrNo", "DNS", "Protocols", "Sockets", "initRandomFill", "randomFill", "timers", "warnOnce", "UNWIND_CACHE", "readEmAsmArgsArray", "getExecutableName", "dynCallLegacy", "getDynCaller", "dynCall", "keepRuntimeAlive", "asyncLoad", "alignMemory", "mmapAlloc", "handleAllocatorInit", "HandleAllocator", "wasmTable", "noExitRuntime", "uleb128Encode", "sigToWasmTypes", "generateFuncType", "convertJsFunctionToWasm", "freeTableIndexes", "functionsInTableMap", "getEmptyTableSlot", "updateTableMap", "getFunctionAddress", "setValue", "getValue", "PATH", "PATH_FS", "UTF8Decoder", "UTF8ArrayToString", "stringToUTF8Array", "stringToUTF8", "lengthBytesUTF8", "intArrayFromString", "stringToAscii", "UTF16Decoder", "UTF16ToString", "stringToUTF16", "lengthBytesUTF16", "UTF32ToString", "stringToUTF32", "lengthBytesUTF32", "stringToNewUTF8", "JSEvents", "specialHTMLTargets", "currentFullscreenStrategy", "restoreOldWindowedStyle", "demangle", "demangleAll", "ExitStatus", "getEnvStrings", "doReadv", "doWritev", "promiseMap", "uncaughtExceptionCount", "exceptionLast", "exceptionCaught", "Browser", "wget", "SYSCALLS", "preloadPlugins", "FS_createPreloadedFile", "FS_modeStringToFlags", "FS_getMode", "FS_stdin_getChar_buffer", "FS_stdin_getChar", "FS", "FS_createDataFile", "MEMFS", "TTY", "PIPEFS", "SOCKFS", "tempFixedLengthArray", "miniTempWebGLFloatBuffers", "miniTempWebGLIntBuffers", "GL", "emscripten_webgl_power_preferences", "AL", "GLUT", "EGL", "GLEW", "IDBStore", "SDL", "SDL_gfx", "allocateUTF8", "allocateUTF8OnStack", "InternalError", "BindingError", "throwInternalError", "throwBindingError", "registeredTypes", "awaitingDependencies", "typeDependencies", "tupleRegistrations", "structRegistrations", "sharedRegisterType", "whenDependentTypesAreResolved", "embind_charCodes", "embind_init_charCodes", "readLatin1String", "getTypeName", "getFunctionName", "heap32VectorToArray", "requireRegisteredType", "usesDestructorStack", "createJsInvoker", "UnboundTypeError", "PureVirtualError", "GenericWireTypeSize", "throwUnboundTypeError", "ensureOverloadTable", "exposePublicSymbol", "replacePublicSymbol", "extendError", "createNamedFunction", "embindRepr", "registeredInstances", "registeredPointers", "registerType", "integerReadValueFromPointer", "floatReadValueFromPointer", "simpleReadValueFromPointer", "readPointer", "runDestructors", "newFunc", "craftInvokerFunction", "embind__requireFunction", "finalizationRegistry", "detachFinalizer_deps", "deletionQueue", "delayFunction", "emval_handles", "emval_symbols", "init_emval", "count_emval_handles", "Emval", "emval_methodCallers", "reflectConstruct" ];
 
 unexportedSymbols.forEach(unexportedRuntimeSymbol);
 
