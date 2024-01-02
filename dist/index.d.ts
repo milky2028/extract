@@ -23,6 +23,8 @@ type Extended = {
   _free(ptr: number): void;
   addFunction(func: Function, types: string): number;
   UTF8ToString(ptr: number, maxLength?: number): string;
+  getValue(ptr: number, type: LLVMStorageType): number;
+  setValue(ptr: number, value: any, type: LLVMStorageType): void;
 
   // extract_book(
   //   archive_file_ptr: number,
