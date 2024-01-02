@@ -1,4 +1,6 @@
 export interface MainModule {
+  END_OF_FILE: number;
+  ENTRY_ERROR: number;
   open_archive(_0: number, _1: number): number;
   close_archive(_0: number): void;
   get_next_entry(_0: number): number;

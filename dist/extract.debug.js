@@ -3912,6 +3912,17 @@ var GenericWireTypeSize = 8;
  });
 }
 
+function __embind_register_constant(name, type, value) {
+ name >>>= 0;
+ type >>>= 0;
+ name = readLatin1String(name);
+ whenDependentTypesAreResolved([], [ type ], function(type) {
+  type = type[0];
+  Module[name] = type["fromWireType"](value);
+  return [];
+ });
+}
+
 function handleAllocatorInit() {
  Object.assign(HandleAllocator.prototype, /** @lends {HandleAllocator.prototype} */ {
   get(id) {
@@ -5330,6 +5341,7 @@ var wasmImports = {
  /** @export */ __syscall_poll: ___syscall_poll,
  /** @export */ _embind_register_bigint: __embind_register_bigint,
  /** @export */ _embind_register_bool: __embind_register_bool,
+ /** @export */ _embind_register_constant: __embind_register_constant,
  /** @export */ _embind_register_emval: __embind_register_emval,
  /** @export */ _embind_register_float: __embind_register_float,
  /** @export */ _embind_register_function: __embind_register_function,

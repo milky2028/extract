@@ -50,6 +50,9 @@ auto close_archive(intptr_t archive_ptr) {
   output_error(arch, return_code);
 }
 
+const intptr_t END_OF_FILE = -2;
+const intptr_t ENTRY_ERROR = -1;
+
 auto get_next_entry(intptr_t archive_ptr) {
   auto return_code = ARCHIVE_OK;
   const auto arch = int_to_ptr<archive*>(archive_ptr);
@@ -61,13 +64,11 @@ auto get_next_entry(intptr_t archive_ptr) {
   }
 
   if (return_code == ARCHIVE_EOF) {
-    intptr_t end_of_file = -2;
-    return end_of_file;
+    return END_OF_FILE;
   }
 
   output_error(arch, return_code);
-  intptr_t error = -1;
-  return error;
+  return ENTRY_ERROR;
 }
 
 auto skip_extraction(intptr_t archive_ptr) {
@@ -97,6 +98,8 @@ auto free_buffer(intptr_t buffer_ptr) {
 
 EMSCRIPTEN_BINDINGS(module) {
   emscripten::function("get_buffer", &get_buffer, emscripten::allow_raw_pointers());
+  emscripten::constant("END_OF_FILE", END_OF_FILE);
+  emscripten::constant("ENTRY_ERROR", ENTRY_ERROR);
 
   emscripten::function("open_archive", &open_archive, emscripten::allow_raw_pointers());
   emscripten::function("close_archive", &close_archive, emscripten::allow_raw_pointers());
