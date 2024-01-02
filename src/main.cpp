@@ -74,6 +74,14 @@ auto skip_extraction(intptr_t archive_ptr) {
   archive_read_data_skip(int_to_ptr<archive*>(archive_ptr));
 }
 
+auto get_entry_name(intptr_t entry_ptr) {
+  return std::string(archive_entry_pathname(int_to_ptr<archive_entry*>(entry_ptr)));
+}
+
+size_t get_entry_size(intptr_t entry_ptr) {
+  return archive_entry_size(int_to_ptr<archive_entry*>(entry_ptr));
+}
+
 auto read_entry_data(intptr_t archive_ptr, intptr_t entry_ptr) {
   const auto entry = int_to_ptr<archive_entry*>(entry_ptr);
   const size_t size = archive_entry_size(entry);
@@ -94,6 +102,8 @@ EMSCRIPTEN_BINDINGS(module) {
   emscripten::function("close_archive", &close_archive, emscripten::allow_raw_pointers());
   emscripten::function("get_next_entry", &get_next_entry, emscripten::allow_raw_pointers());
   emscripten::function("read_entry_data", &read_entry_data, emscripten::allow_raw_pointers());
+  emscripten::function("get_entry_size", &get_entry_size, emscripten::allow_raw_pointers());
+  emscripten::function("get_entry_name", &get_entry_name, emscripten::allow_raw_pointers());
   emscripten::function("free_buffer", &free_buffer, emscripten::allow_raw_pointers());
   emscripten::function("skip_extraction", &skip_extraction, emscripten::allow_raw_pointers());
 }
