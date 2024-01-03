@@ -5381,9 +5381,9 @@ var ___errno_location = createExportWrapper("__errno_location");
 
 var _malloc = Module["_malloc"] = createExportWrapper("malloc");
 
-var ___getTypeName = createExportWrapper("__getTypeName");
-
 var _fflush = Module["_fflush"] = createExportWrapper("fflush");
+
+var ___getTypeName = createExportWrapper("__getTypeName");
 
 var setTempRet0 = createExportWrapper("setTempRet0");
 
