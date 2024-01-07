@@ -3,7 +3,7 @@ var Module = (() => {
   var _scriptDir = import.meta.url;
   
   return (
-async function(moduleArg = {}) {
+function(moduleArg = {}) {
 
 var Module = moduleArg;
 
@@ -65,57 +65,7 @@ function locateFile(path) {
 
 var read_, readAsync, readBinary;
 
-if (ENVIRONMENT_IS_NODE) {
- if (typeof process == "undefined" || !process.release || process.release.name !== "node") throw new Error("not compiled for this environment (did you build to HTML and try to run it not on the web, or set ENVIRONMENT to something - like node - and run it someplace else - like on the web?)");
- var nodeVersion = process.versions.node;
- var numericVersion = nodeVersion.split(".").slice(0, 3);
- numericVersion = (numericVersion[0] * 1e4) + (numericVersion[1] * 100) + (numericVersion[2].split("-")[0] * 1);
- var minVersion = 16e4;
- if (numericVersion < 16e4) {
-  throw new Error("This emscripten-generated code requires node v16.0.0 (detected v" + nodeVersion + ")");
- }
- const {createRequire: createRequire} = await import("module");
- /** @suppress{duplicate} */ var require = createRequire(import.meta.url);
- var fs = require("fs");
- var nodePath = require("path");
- if (ENVIRONMENT_IS_WORKER) {
-  scriptDirectory = nodePath.dirname(scriptDirectory) + "/";
- } else {
-  scriptDirectory = require("url").fileURLToPath(new URL("./", import.meta.url));
- }
- read_ = (filename, binary) => {
-  filename = isFileURI(filename) ? new URL(filename) : nodePath.normalize(filename);
-  return fs.readFileSync(filename, binary ? undefined : "utf8");
- };
- readBinary = filename => {
-  var ret = read_(filename, true);
-  if (!ret.buffer) {
-   ret = new Uint8Array(ret);
-  }
-  assert(ret.buffer);
-  return ret;
- };
- readAsync = (filename, onload, onerror, binary = true) => {
-  filename = isFileURI(filename) ? new URL(filename) : nodePath.normalize(filename);
-  fs.readFile(filename, binary ? undefined : "utf8", (err, data) => {
-   if (err) onerror(err); else onload(binary ? data.buffer : data);
-  });
- };
- if (!Module["thisProgram"] && process.argv.length > 1) {
-  thisProgram = process.argv[1].replace(/\\/g, "/");
- }
- arguments_ = process.argv.slice(2);
- process.on("uncaughtException", ex => {
-  if (ex !== "unwind" && !(ex instanceof ExitStatus) && !(ex.context instanceof ExitStatus)) {
-   throw ex;
-  }
- });
- quit_ = (status, toThrow) => {
-  process.exitCode = status;
-  throw toThrow;
- };
- Module["inspect"] = () => "[Emscripten Module object]";
-} else if (ENVIRONMENT_IS_SHELL) {
+if (ENVIRONMENT_IS_SHELL) {
  if ((typeof process == "object" && typeof require === "function") || typeof window == "object" || typeof importScripts == "function") throw new Error("not compiled for this environment (did you build to HTML and try to run it not on the web, or set ENVIRONMENT to something - like node - and run it someplace else - like on the web?)");
  if (typeof read != "undefined") {
   read_ = read;
@@ -277,6 +227,8 @@ var JSFILEFS = "JSFILEFS is no longer included by default; build with -ljsfilefs
 var OPFS = "OPFS is no longer included by default; build with -lopfs.js";
 
 var NODEFS = "NODEFS is no longer included by default; build with -lnodefs.js";
+
+assert(!ENVIRONMENT_IS_NODE, "node environment detected but not enabled at build time.  Add 'node' to `-sENVIRONMENT` to enable.");
 
 assert(!ENVIRONMENT_IS_SHELL, "shell environment detected but not enabled at build time.  Add 'shell' to `-sENVIRONMENT` to enable.");
 
@@ -546,7 +498,7 @@ function getBinarySync(file) {
 
 function getBinaryPromise(binaryFile) {
  if (!wasmBinary && (ENVIRONMENT_IS_WEB || ENVIRONMENT_IS_WORKER)) {
-  if (typeof fetch == "function" && !isFileURI(binaryFile)) {
+  if (typeof fetch == "function") {
    return fetch(binaryFile, {
     credentials: "same-origin"
    }).then(response => {
@@ -555,10 +507,6 @@ function getBinaryPromise(binaryFile) {
     }
     return response["arrayBuffer"]();
    }).catch(() => getBinarySync(binaryFile));
-  } else if (readAsync) {
-   return new Promise((resolve, reject) => {
-    readAsync(binaryFile, response => resolve(new Uint8Array(/** @type{!ArrayBuffer} */ (response))), reject);
-   });
   }
  }
  return Promise.resolve().then(() => getBinarySync(binaryFile));
@@ -575,7 +523,7 @@ function instantiateArrayBuffer(binaryFile, imports, receiver) {
 }
 
 function instantiateAsync(binary, binaryFile, imports, callback) {
- if (!binary && typeof WebAssembly.instantiateStreaming == "function" && !isDataURI(binaryFile) &&  !isFileURI(binaryFile) &&  !ENVIRONMENT_IS_NODE && typeof fetch == "function") {
+ if (!binary && typeof WebAssembly.instantiateStreaming == "function" && !isDataURI(binaryFile) && typeof fetch == "function") {
   return fetch(binaryFile, {
    credentials: "same-origin"
   }).then(response => {
@@ -810,7 +758,6 @@ var warnOnce = text => {
  warnOnce.shown ||= {};
  if (!warnOnce.shown[text]) {
   warnOnce.shown[text] = 1;
-  if (ENVIRONMENT_IS_NODE) text = "warning: " + text;
   err(text);
  }
 };
@@ -881,18 +828,7 @@ var PATH = {
 var initRandomFill = () => {
  if (typeof crypto == "object" && typeof crypto["getRandomValues"] == "function") {
   return view => crypto.getRandomValues(view);
- } else if (ENVIRONMENT_IS_NODE) {
-  try {
-   var crypto_module = require("crypto");
-   var randomFillSync = crypto_module["randomFillSync"];
-   if (randomFillSync) {
-    return view => crypto_module["randomFillSync"](view);
-   }
-   var randomBytes = crypto_module["randomBytes"];
-   return view => (view.set(randomBytes(view.byteLength)),  view);
-  } catch (e) {}
- }
- abort("no cryptographic support found for randomDevice. consider polyfilling it if you want to use something insecure like Math.random(), e.g. put this in a --pre-js: var crypto = { getRandomValues: (array) => { for (var i = 0; i < array.length; i++) array[i] = (Math.random()*256)|0 } };");
+ } else  abort("no cryptographic support found for randomDevice. consider polyfilling it if you want to use something insecure like Math.random(), e.g. put this in a --pre-js: var crypto = { getRandomValues: (array) => { for (var i = 0; i < array.length; i++) array[i] = (Math.random()*256)|0 } };");
 };
 
 var randomFill = view => (randomFill = initRandomFill())(view);
@@ -1062,22 +998,7 @@ var stringToUTF8Array = (str, heap, outIdx, maxBytesToWrite) => {
 var FS_stdin_getChar = () => {
  if (!FS_stdin_getChar_buffer.length) {
   var result = null;
-  if (ENVIRONMENT_IS_NODE) {
-   var BUFSIZE = 256;
-   var buf = Buffer.alloc(BUFSIZE);
-   var bytesRead = 0;
-   /** @suppress {missingProperties} */ var fd = process.stdin.fd;
-   try {
-    bytesRead = fs.readSync(fd, buf);
-   } catch (e) {
-    if (e.toString().includes("EOF")) bytesRead = 0; else throw e;
-   }
-   if (bytesRead > 0) {
-    result = buf.slice(0, bytesRead).toString("utf-8");
-   } else {
-    result = null;
-   }
-  } else if (typeof window != "undefined" && typeof window.prompt == "function") {
+  if (typeof window != "undefined" && typeof window.prompt == "function") {
    result = window.prompt("Input: ");
    if (result !== null) {
     result += "\n";
@@ -5381,9 +5302,9 @@ var ___errno_location = createExportWrapper("__errno_location");
 
 var _malloc = Module["_malloc"] = createExportWrapper("malloc");
 
-var _fflush = Module["_fflush"] = createExportWrapper("fflush");
-
 var ___getTypeName = createExportWrapper("__getTypeName");
+
+var _fflush = Module["_fflush"] = createExportWrapper("fflush");
 
 var setTempRet0 = createExportWrapper("setTempRet0");
 

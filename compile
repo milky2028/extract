@@ -5,6 +5,7 @@ emcc \
 -sALLOW_MEMORY_GROWTH \
 -sALLOW_TABLE_GROWTH \
 -sMAXIMUM_MEMORY=4gb \
+-sENVIRONMENT=web,worker \
 -sUSE_ZLIB=1 \
 -sUSE_BZIP2=1 \
 -Oz \
@@ -26,6 +27,7 @@ emcc \
 -sUSE_BZIP2=1 \
 -sALLOW_TABLE_GROWTH \
 -sMAXIMUM_MEMORY=4gb \
+-sENVIRONMENT=web,worker \
 -g \
 -gsource-map \
 -O0 \
