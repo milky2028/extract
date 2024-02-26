@@ -15,7 +15,7 @@ emcc \
 -larchive \
 -lembind \
 --embind-emit-tsd extract.d.ts \
-./src/main.cpp \
+./src/js-driven-api.cpp \
 --pre-js=./src/locateFile.js \
 -o ./dist/extract.js &&
 EMCC_DEBUG=1 &&
@@ -40,6 +40,6 @@ emcc \
 -larchive \
 -lembind \
 --embind-emit-tsd extract.d.ts \
-./src/main.cpp \
+./src/js-driven-api.cpp \
 --pre-js=./src/locateFile.js \
 -o ./dist/extract.debug.js
