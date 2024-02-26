@@ -2,13 +2,8 @@
 #include <archive_entry.h>
 #include <emscripten/bind.h>
 #include <stdio.h>
+#include <format>
 #include <string>
-
-auto output_error(archive* active_archive, int return_code) {
-  if (return_code < ARCHIVE_OK) {
-    printf("Archive Error: %s\n", archive_error_string(active_archive));
-  }
-}
 
 template <typename T>
 auto int_to_ptr(intptr_t ptr) {
@@ -39,7 +34,9 @@ auto open_archive(intptr_t archive_file_ptr, intptr_t archive_file_size) {
   archive_read_support_format_zip(arch);
 
   return_code = archive_read_open_memory(arch, int_to_ptr<void*>(archive_file_ptr), archive_file_size);
-  output_error(arch, return_code);
+  if (return_code < ARCHIVE_OK) {
+    throw std::runtime_error(std::string(archive_error_string(arch)));
+  }
 
   return ptr_to_int(arch);
 }
@@ -49,7 +46,9 @@ auto close_archive(intptr_t archive_ptr) {
   const auto arch = int_to_ptr<archive*>(archive_ptr);
 
   return_code = archive_read_free(arch);
-  output_error(arch, return_code);
+  if (return_code < ARCHIVE_OK) {
+    throw std::runtime_error(std::string(archive_error_string(arch)));
+  }
 }
 
 const intptr_t END_OF_FILE = -2;
@@ -69,8 +68,7 @@ auto get_next_entry(intptr_t archive_ptr) {
     return END_OF_FILE;
   }
 
-  output_error(arch, return_code);
-  return ENTRY_ERROR;
+  throw std::runtime_error(std::string(archive_error_string(arch)));
 }
 
 auto skip_extraction(intptr_t archive_ptr) {
