@@ -2,7 +2,7 @@ import { MainModule } from "./extract";
 
 declare global {
   namespace WebAssembly {
-    export const Exception: unknown;
+    export class Exception {}
   }
 }
 
