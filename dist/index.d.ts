@@ -7,7 +7,7 @@ declare global {
 }
 
 type Extended = {
-  getExceptionMessage(error: typeof WebAssembly.Exception): [string, string];
+  getExceptionMessage(error: WebAssembly.Exception): [string, string];
   HEAPU8: Uint8Array;
 };
 
