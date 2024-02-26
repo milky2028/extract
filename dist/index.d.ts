@@ -1,7 +1,13 @@
 import { MainModule } from "./extract";
 
+declare global {
+  namespace WebAssembly {
+    export const Exception: unknown;
+  }
+}
+
 type Extended = {
-  getExceptionMessage(error: Error): [string, string];
+  getExceptionMessage(error: typeof WebAssembly.Exception): [string, string];
   HEAPU8: Uint8Array;
 };
 
