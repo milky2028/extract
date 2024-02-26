@@ -2,8 +2,6 @@ import { MainModule } from "./extract";
 
 type ReadCallback = (path: string, buffer: Uint8Array) => void;
 
-// type Vector =
-
 type LLVMStorageType =
   | "i8"
   | "i16"
@@ -19,20 +17,10 @@ type LLVMStorageType =
   | "double*";
 
 type Extended = {
-  _malloc(size: number): number;
-  _free(ptr: number): void;
   addFunction(func: Function, types: string): number;
   UTF8ToString(ptr: number, maxLength?: number): string;
   getValue(ptr: number, type: LLVMStorageType): number;
   setValue(ptr: number, value: any, type: LLVMStorageType): void;
-
-  // extract_book(
-  //   archive_file_ptr: number,
-  //   archive_file_size: number,
-  //   read_callback_ptr: number
-  // ): boolean;
-  // get_buffer(buffer_ptr: number, buffer_size: number): Uint8Array;
-  // list_files(archive_file_ptr: number, archive_file_size: number): string[];
 
   HEAPU8: Uint8Array;
   HEAP8: Uint8Array;
@@ -41,4 +29,4 @@ type Extended = {
   };
 };
 
-export default function initialize(): Promise<Extended & MainModule>;
+export default function initialize(): Promise<MainModule & Extended>;

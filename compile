@@ -18,7 +18,11 @@ emcc \
 ./src/main.cpp \
 --pre-js=./src/locateFile.js \
 -o ./dist/extract.js &&
+EMCC_DEBUG=1 &&
 emcc \
+-sDEMANGLE_SUPPORT=1 \
+-sSTACK_OVERFLOW_CHECK=1 \
+-sSAFE_HEAP=1 \
 -sEXPORT_ES6 \
 -sEXPORTED_RUNTIME_METHODS=addFunction,UTF8ToString \
 -sEXPORTED_FUNCTIONS=_malloc,_free \
