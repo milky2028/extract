@@ -20,7 +20,6 @@ emcc \
 -o ./dist/extract.js &&
 EMCC_DEBUG=1 &&
 emcc \
--sDEMANGLE_SUPPORT=1 \
 -sSTACK_OVERFLOW_CHECK=1 \
 -sSAFE_HEAP=1 \
 -sEXPORT_ES6 \
