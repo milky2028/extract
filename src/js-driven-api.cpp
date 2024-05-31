@@ -35,7 +35,7 @@ auto open_archive(intptr_t archive_file_ptr, intptr_t archive_file_size) {
 
   return_code = archive_read_open_memory(arch, int_to_ptr<void*>(archive_file_ptr), archive_file_size);
   if (return_code < ARCHIVE_OK) {
-    throw std::runtime_error(std::string(archive_error_string(arch)));
+    return static_cast<intptr_t>(-1);
   }
 
   return ptr_to_int(arch);
@@ -45,10 +45,7 @@ auto close_archive(intptr_t archive_ptr) {
   auto return_code = ARCHIVE_OK;
   const auto arch = int_to_ptr<archive*>(archive_ptr);
 
-  return_code = archive_read_free(arch);
-  if (return_code < ARCHIVE_OK) {
-    throw std::runtime_error(std::string(archive_error_string(arch)));
-  }
+  archive_read_free(arch);
 }
 
 const intptr_t END_OF_FILE = -2;
@@ -68,7 +65,7 @@ auto get_next_entry(intptr_t archive_ptr) {
     return END_OF_FILE;
   }
 
-  throw std::runtime_error(std::string(archive_error_string(arch)));
+  return static_cast<intptr_t>(-1);
 }
 
 auto skip_extraction(intptr_t archive_ptr) {

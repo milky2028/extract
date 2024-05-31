@@ -1,10 +1,4 @@
-// TypeScript bindings for emscripten-generated code.  Automatically generated at compile time.
-interface WasmModule {
-  _free(_0: number): void;
-  _malloc(_0: number): number;
-}
-
-interface EmbindModule {
+export interface MainModule {
   free_buffer(_0: number): void;
   END_OF_FILE: number;
   ENTRY_ERROR: number;
@@ -18,4 +12,3 @@ interface EmbindModule {
   get_entry_name(_0: number): string;
   get_buffer(_0: number, _1: number): any;
 }
-export type MainModule = WasmModule & EmbindModule;
