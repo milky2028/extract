@@ -5,6 +5,9 @@
 #include <format>
 #include <string>
 
+const intptr_t END_OF_FILE = -2;
+const intptr_t ENTRY_ERROR = -1;
+
 template <typename T>
 auto int_to_ptr(intptr_t ptr) {
   return reinterpret_cast<T>(ptr);
@@ -35,7 +38,7 @@ auto open_archive(intptr_t archive_file_ptr, intptr_t archive_file_size) {
 
   return_code = archive_read_open_memory(arch, int_to_ptr<void*>(archive_file_ptr), archive_file_size);
   if (return_code < ARCHIVE_OK) {
-    return static_cast<intptr_t>(-1);
+    return ENTRY_ERROR;
   }
 
   return ptr_to_int(arch);
@@ -47,9 +50,6 @@ auto close_archive(intptr_t archive_ptr) {
 
   archive_read_free(arch);
 }
-
-const intptr_t END_OF_FILE = -2;
-const intptr_t ENTRY_ERROR = -1;
 
 auto get_next_entry(intptr_t archive_ptr) {
   auto return_code = ARCHIVE_OK;
@@ -65,7 +65,7 @@ auto get_next_entry(intptr_t archive_ptr) {
     return END_OF_FILE;
   }
 
-  return static_cast<intptr_t>(-1);
+  return ENTRY_ERROR;
 }
 
 auto skip_extraction(intptr_t archive_ptr) {
