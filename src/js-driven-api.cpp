@@ -5,25 +5,28 @@
 #include <format>
 #include <string>
 
+const intptr_t END_OF_FILE = -1;
+const intptr_t ENTRY_ERROR = -2;
+
 template <typename T>
-auto int_to_ptr(uintptr_t ptr) {
+auto int_to_ptr(intptr_t ptr) {
   return reinterpret_cast<T>(ptr);
 }
 
 template <typename T>
 auto ptr_to_int(T ptr) {
-  return reinterpret_cast<uintptr_t>(ptr);
+  return reinterpret_cast<intptr_t>(ptr);
 }
 
-auto get_buffer(uintptr_t buffer_ptr, size_t buffer_size) {
+auto get_buffer(intptr_t buffer_ptr, size_t buffer_size) {
   return emscripten::val(emscripten::typed_memory_view<uint8_t>(buffer_size, int_to_ptr<uint8_t*>(buffer_ptr)));
 }
 
-auto free_buffer(uintptr_t buffer_ptr) {
+auto free_buffer(intptr_t buffer_ptr) {
   free(int_to_ptr<void*>(buffer_ptr));
 }
 
-auto open_archive(uintptr_t archive_file_ptr, size_t archive_file_size) {
+auto open_archive(intptr_t archive_file_ptr, intptr_t archive_file_size) {
   auto return_code = ARCHIVE_OK;
   const auto arch = archive_read_new();
 
@@ -35,53 +38,53 @@ auto open_archive(uintptr_t archive_file_ptr, size_t archive_file_size) {
 
   return_code = archive_read_open_memory(arch, int_to_ptr<void*>(archive_file_ptr), archive_file_size);
   if (return_code < ARCHIVE_OK) {
-    return emscripten::val::null();
+    return ENTRY_ERROR;
   }
 
-  return emscripten::val(ptr_to_int(arch));
+  return ptr_to_int(arch);
 }
 
-auto close_archive(uintptr_t archive_ptr) {
+auto close_archive(intptr_t archive_ptr) {
   auto return_code = ARCHIVE_OK;
   const auto arch = int_to_ptr<archive*>(archive_ptr);
 
   archive_read_free(arch);
 }
 
-auto get_next_entry(uintptr_t archive_ptr) {
+auto get_next_entry(intptr_t archive_ptr) {
   auto return_code = ARCHIVE_OK;
   const auto arch = int_to_ptr<archive*>(archive_ptr);
 
   archive_entry* entry;
   return_code = archive_read_next_header(arch, &entry);
   if (return_code == ARCHIVE_OK) {
-    return emscripten::val(ptr_to_int(entry));
+    return ptr_to_int(entry);
   }
 
   if (return_code == ARCHIVE_EOF) {
-    return emscripten::val::null();
+    return END_OF_FILE;
   }
 
-  return emscripten::val::null();
+  return ENTRY_ERROR;
 }
 
-auto skip_extraction(uintptr_t archive_ptr) {
+auto skip_extraction(intptr_t archive_ptr) {
   archive_read_data_skip(int_to_ptr<archive*>(archive_ptr));
 }
 
-auto get_entry_name(uintptr_t entry_ptr) {
+auto get_entry_name(intptr_t entry_ptr) {
   return std::string(archive_entry_pathname(int_to_ptr<archive_entry*>(entry_ptr)));
 }
 
-size_t get_entry_size(uintptr_t entry_ptr) {
+size_t get_entry_size(intptr_t entry_ptr) {
   return archive_entry_size(int_to_ptr<archive_entry*>(entry_ptr));
 }
 
-auto entry_is_file(uintptr_t entry_ptr) {
+auto entry_is_file(intptr_t entry_ptr) {
   return archive_entry_filetype(int_to_ptr<archive_entry*>(entry_ptr)) == 32768;
 }
 
-auto read_entry_data(uintptr_t archive_ptr, uintptr_t entry_ptr) {
+auto read_entry_data(intptr_t archive_ptr, intptr_t entry_ptr) {
   const auto entry = int_to_ptr<archive_entry*>(entry_ptr);
   const size_t size = archive_entry_size(entry);
   void* read_buffer = malloc(size);
@@ -93,6 +96,9 @@ auto read_entry_data(uintptr_t archive_ptr, uintptr_t entry_ptr) {
 EMSCRIPTEN_BINDINGS(module) {
   emscripten::function("get_buffer", &get_buffer, emscripten::allow_raw_pointers());
   emscripten::function("free_buffer", &free_buffer, emscripten::allow_raw_pointers());
+
+  emscripten::constant("END_OF_FILE", END_OF_FILE);
+  emscripten::constant("ENTRY_ERROR", ENTRY_ERROR);
 
   emscripten::function("open_archive", &open_archive, emscripten::allow_raw_pointers());
   emscripten::function("close_archive", &close_archive, emscripten::allow_raw_pointers());
