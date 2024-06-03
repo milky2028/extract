@@ -14,7 +14,7 @@ emcc \
 -L/Users/tgross/Documents/GitHub/libarchive/dist/lib \
 -larchive \
 -lembind \
---embind-emit-tsd extract.d.ts \
+--emit-tsd extract.d.ts \
 ./src/js-driven-api.cpp \
 --pre-js=./src/locateFile.js \
 -o ./dist/extract.js &&
@@ -38,7 +38,6 @@ emcc \
 -L/Users/tgross/Documents/GitHub/libarchive/dist/lib \
 -larchive \
 -lembind \
---embind-emit-tsd extract.d.ts \
 ./src/js-driven-api.cpp \
 --pre-js=./src/locateFile.js \
 -o ./dist/extract.debug.js &&
@@ -62,7 +61,6 @@ emcc \
 -L/Users/tgross/Documents/GitHub/libarchive/dist/lib \
 -larchive \
 -lembind \
---embind-emit-tsd extract.d.ts \
 ./src/js-driven-api.cpp \
 --pre-js=./src/locateFile.js \
 -o ./dist/extract.node.debug.js &&

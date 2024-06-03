@@ -5,28 +5,28 @@
 #include <format>
 #include <string>
 
-const intptr_t END_OF_FILE = -1;
-const intptr_t ENTRY_ERROR = -2;
+const uint32_t END_OF_FILE = -2;
+const uint32_t ENTRY_ERROR = -1;
 
 template <typename T>
-auto int_to_ptr(intptr_t ptr) {
+auto int_to_ptr(uint32_t ptr) {
   return reinterpret_cast<T>(ptr);
 }
 
 template <typename T>
 auto ptr_to_int(T ptr) {
-  return reinterpret_cast<intptr_t>(ptr);
+  return reinterpret_cast<uint32_t>(ptr);
 }
 
-auto get_buffer(intptr_t buffer_ptr, size_t buffer_size) {
+auto get_buffer(uint32_t buffer_ptr, size_t buffer_size) {
   return emscripten::val(emscripten::typed_memory_view<uint8_t>(buffer_size, int_to_ptr<uint8_t*>(buffer_ptr)));
 }
 
-auto free_buffer(intptr_t buffer_ptr) {
+auto free_buffer(uint32_t buffer_ptr) {
   free(int_to_ptr<void*>(buffer_ptr));
 }
 
-auto open_archive(intptr_t archive_file_ptr, intptr_t archive_file_size) {
+auto open_archive(uint32_t archive_file_ptr, uint32_t archive_file_size) {
   auto return_code = ARCHIVE_OK;
   const auto arch = archive_read_new();
 
@@ -44,14 +44,14 @@ auto open_archive(intptr_t archive_file_ptr, intptr_t archive_file_size) {
   return ptr_to_int(arch);
 }
 
-auto close_archive(intptr_t archive_ptr) {
+auto close_archive(uint32_t archive_ptr) {
   auto return_code = ARCHIVE_OK;
   const auto arch = int_to_ptr<archive*>(archive_ptr);
 
   archive_read_free(arch);
 }
 
-auto get_next_entry(intptr_t archive_ptr) {
+auto get_next_entry(uint32_t archive_ptr) {
   auto return_code = ARCHIVE_OK;
   const auto arch = int_to_ptr<archive*>(archive_ptr);
 
@@ -68,23 +68,23 @@ auto get_next_entry(intptr_t archive_ptr) {
   return ENTRY_ERROR;
 }
 
-auto skip_extraction(intptr_t archive_ptr) {
+auto skip_extraction(uint32_t archive_ptr) {
   archive_read_data_skip(int_to_ptr<archive*>(archive_ptr));
 }
 
-auto get_entry_name(intptr_t entry_ptr) {
+auto get_entry_name(uint32_t entry_ptr) {
   return std::string(archive_entry_pathname(int_to_ptr<archive_entry*>(entry_ptr)));
 }
 
-size_t get_entry_size(intptr_t entry_ptr) {
+size_t get_entry_size(uint32_t entry_ptr) {
   return archive_entry_size(int_to_ptr<archive_entry*>(entry_ptr));
 }
 
-auto entry_is_file(intptr_t entry_ptr) {
+auto entry_is_file(uint32_t entry_ptr) {
   return archive_entry_filetype(int_to_ptr<archive_entry*>(entry_ptr)) == 32768;
 }
 
-auto read_entry_data(intptr_t archive_ptr, intptr_t entry_ptr) {
+auto read_entry_data(uint32_t archive_ptr, uint32_t entry_ptr) {
   const auto entry = int_to_ptr<archive_entry*>(entry_ptr);
   const size_t size = archive_entry_size(entry);
   void* read_buffer = malloc(size);
