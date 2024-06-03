@@ -18,7 +18,7 @@ auto ptr_to_int(T ptr) {
   return reinterpret_cast<uint32_t>(ptr);
 }
 
-auto get_buffer(uint32_t buffer_ptr, size_t buffer_size) {
+auto get_buffer(uint32_t buffer_ptr, uint32_t buffer_size) {
   return emscripten::val(emscripten::typed_memory_view<uint8_t>(buffer_size, int_to_ptr<uint8_t*>(buffer_ptr)));
 }
 
