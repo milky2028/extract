@@ -20,6 +20,7 @@ emcc \
 -o ./dist/extract.js &&
 EMCC_DEBUG=1 &&
 emcc \
+--memoryprofiler \
 -sSTACK_OVERFLOW_CHECK=1 \
 -sEXPORT_ES6 \
 -sEXPORTED_RUNTIME_METHODS=UTF8ToString \
