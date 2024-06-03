@@ -1,6 +1,5 @@
 emcc \
 -sEXPORT_ES6 \
--sEXPORTED_RUNTIME_METHODS=UTF8ToString \
 -sEXPORTED_FUNCTIONS=_malloc,_free \
 -sALLOW_MEMORY_GROWTH \
 -sALLOW_TABLE_GROWTH \
@@ -21,16 +20,17 @@ emcc \
 EMCC_DEBUG=1 &&
 emcc \
 --memoryprofiler \
+-sASSERTIONS \
+-sSAFE_HEAP \
 -sSTACK_OVERFLOW_CHECK=1 \
 -sEXPORT_ES6 \
--sEXPORTED_RUNTIME_METHODS=UTF8ToString \
 -sEXPORTED_FUNCTIONS=_malloc,_free \
 -sALLOW_MEMORY_GROWTH \
--sUSE_ZLIB=1 \
--sUSE_BZIP2=1 \
 -sALLOW_TABLE_GROWTH \
 -sMAXIMUM_MEMORY=4gb \
 -sENVIRONMENT=web,worker \
+-sUSE_ZLIB=1 \
+-sUSE_BZIP2=1 \
 -g \
 -gsource-map \
 -O0 \
@@ -44,16 +44,17 @@ emcc \
 -o ./dist/extract.debug.js &&
 EMCC_DEBUG=1 &&
 emcc \
+-sASSERTIONS \
+-sSAFE_HEAP \
 -sSTACK_OVERFLOW_CHECK=1 \
 -sEXPORT_ES6 \
--sEXPORTED_RUNTIME_METHODS=UTF8ToString \
 -sEXPORTED_FUNCTIONS=_malloc,_free \
 -sALLOW_MEMORY_GROWTH \
--sUSE_ZLIB=1 \
--sUSE_BZIP2=1 \
 -sALLOW_TABLE_GROWTH \
 -sMAXIMUM_MEMORY=4gb \
 -sENVIRONMENT=node \
+-sUSE_ZLIB=1 \
+-sUSE_BZIP2=1 \
 -g \
 -gsource-map \
 -O0 \
@@ -67,7 +68,6 @@ emcc \
 -o ./dist/extract.node.debug.js &&
 emcc \
 -sEXPORT_ES6 \
--sEXPORTED_RUNTIME_METHODS=UTF8ToString \
 -sEXPORTED_FUNCTIONS=_malloc,_free \
 -sALLOW_MEMORY_GROWTH \
 -sALLOW_TABLE_GROWTH \
