@@ -105,6 +105,6 @@ emcc \
 -larchive \
 -lembind \
 --emit-tsd extract-c.d.ts \
-./src/js-driven-api.cpp \
+./src/c-driven-api.cpp \
 --pre-js=./src/locateFile.js \
 -o ./dist/extract-c.js

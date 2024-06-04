@@ -843,6 +843,13 @@ function dbg(...args) {
   console.warn(...args);
 }
 
+var ASM_CONSTS = {
+  274436: $0 => {
+    const event = new CustomEvent(UTF8ToString($0));
+    dispatchEvent(event);
+  }
+};
+
 /** @constructor */ function ExitStatus(status) {
   this.name = "ExitStatus";
   this.message = `Program terminated with exit(${status})`;
@@ -1356,6 +1363,124 @@ function ___assert_fail(condition, filename, line, func) {
   abort(`Assertion failed: ${UTF8ToString(condition)}, at: ` + [ filename ? UTF8ToString(filename) : "unknown filename", line, func ? UTF8ToString(func) : "unknown function" ]);
 }
 
+class ExceptionInfo {
+  constructor(excPtr) {
+    this.excPtr = excPtr;
+    this.ptr = excPtr - 24;
+  }
+  set_type(type) {
+    GROWABLE_HEAP_U32()[(((this.ptr) + (4)) >>> 2) >>> 0] = type;
+  }
+  get_type() {
+    return GROWABLE_HEAP_U32()[(((this.ptr) + (4)) >>> 2) >>> 0];
+  }
+  set_destructor(destructor) {
+    GROWABLE_HEAP_U32()[(((this.ptr) + (8)) >>> 2) >>> 0] = destructor;
+  }
+  get_destructor() {
+    return GROWABLE_HEAP_U32()[(((this.ptr) + (8)) >>> 2) >>> 0];
+  }
+  set_caught(caught) {
+    caught = caught ? 1 : 0;
+    GROWABLE_HEAP_I8()[(this.ptr) + (12) >>> 0] = caught;
+  }
+  get_caught() {
+    return GROWABLE_HEAP_I8()[(this.ptr) + (12) >>> 0] != 0;
+  }
+  set_rethrown(rethrown) {
+    rethrown = rethrown ? 1 : 0;
+    GROWABLE_HEAP_I8()[(this.ptr) + (13) >>> 0] = rethrown;
+  }
+  get_rethrown() {
+    return GROWABLE_HEAP_I8()[(this.ptr) + (13) >>> 0] != 0;
+  }
+  init(type, destructor) {
+    this.set_adjusted_ptr(0);
+    this.set_type(type);
+    this.set_destructor(destructor);
+  }
+  set_adjusted_ptr(adjustedPtr) {
+    GROWABLE_HEAP_U32()[(((this.ptr) + (16)) >>> 2) >>> 0] = adjustedPtr;
+  }
+  get_adjusted_ptr() {
+    return GROWABLE_HEAP_U32()[(((this.ptr) + (16)) >>> 2) >>> 0];
+  }
+  get_exception_ptr() {
+    var isPointer = ___cxa_is_pointer_type(this.get_type());
+    if (isPointer) {
+      return GROWABLE_HEAP_U32()[((this.excPtr) >>> 2) >>> 0];
+    }
+    var adjusted = this.get_adjusted_ptr();
+    if (adjusted !== 0) return adjusted;
+    return this.excPtr;
+  }
+}
+
+var exceptionLast = 0;
+
+var uncaughtExceptionCount = 0;
+
+function ___cxa_throw(ptr, type, destructor) {
+  ptr >>>= 0;
+  type >>>= 0;
+  destructor >>>= 0;
+  var info = new ExceptionInfo(ptr);
+  info.init(type, destructor);
+  exceptionLast = ptr;
+  uncaughtExceptionCount++;
+  assert(false, "Exception thrown, but exception catching is not enabled. Compile with -sNO_DISABLE_EXCEPTION_CATCHING or -sEXCEPTION_CATCHING_ALLOWED=[..] to catch.");
+}
+
+function pthreadCreateProxied(pthread_ptr, attr, startRoutine, arg) {
+  if (ENVIRONMENT_IS_PTHREAD) return proxyToMainThread(2, 0, 1, pthread_ptr, attr, startRoutine, arg);
+  return ___pthread_create_js(pthread_ptr, attr, startRoutine, arg);
+}
+
+function ___pthread_create_js(pthread_ptr, attr, startRoutine, arg) {
+  pthread_ptr >>>= 0;
+  attr >>>= 0;
+  startRoutine >>>= 0;
+  arg >>>= 0;
+  if (typeof SharedArrayBuffer == "undefined") {
+    err("Current environment does not support SharedArrayBuffer, pthreads are not available!");
+    return 6;
+  }
+  var transferList = [];
+  var error = 0;
+  if (ENVIRONMENT_IS_PTHREAD && (transferList.length === 0 || error)) {
+    return pthreadCreateProxied(pthread_ptr, attr, startRoutine, arg);
+  }
+  if (error) return error;
+  var threadParams = {
+    startRoutine: startRoutine,
+    pthread_ptr: pthread_ptr,
+    arg: arg,
+    transferList: transferList
+  };
+  if (ENVIRONMENT_IS_PTHREAD) {
+    threadParams.cmd = "spawnThread";
+    postMessage(threadParams, transferList);
+    return 0;
+  }
+  return spawnThread(threadParams);
+}
+
+function ___pthread_kill_js(thread, signal) {
+  thread >>>= 0;
+  if (signal === 33) {
+    if (!ENVIRONMENT_IS_PTHREAD) cancelThread(thread); else postMessage({
+      "cmd": "cancelThread",
+      "thread": thread
+    });
+  } else {
+    if (!ENVIRONMENT_IS_PTHREAD) killThread(thread); else postMessage({
+      "cmd": "killThread",
+      "thread": thread
+    });
+  }
+  return 0;
+}
+
 var __abort_js = () => {
   abort("native code called abort()");
 };
@@ -1490,17 +1615,6 @@ var GenericWireTypeSize = 8;
     destructorFunction: null
   });
 }
-
-var __embind_register_constant = function(name, type, value) {
-  name >>>= 0;
-  type >>>= 0;
-  name = readLatin1String(name);
-  whenDependentTypesAreResolved([], [ type ], type => {
-    type = type[0];
-    Module[name] = type["fromWireType"](value);
-    return [];
-  });
-};
 
 var emval_freelist = [];
 
@@ -2392,8 +2506,7 @@ function __emscripten_receive_on_main_thread_js(funcIndex, emAsmAddr, callingThr
   for (var i = 0; i < numCallArgs; i++) {
     proxiedJSCallArgs[i] = GROWABLE_HEAP_F64()[b + i >>> 0];
   }
-  assert(!emAsmAddr);
-  var func = proxiedFunctionTable[funcIndex];
+  var func = emAsmAddr ? ASM_CONSTS[emAsmAddr] : proxiedFunctionTable[funcIndex];
   assert(!(funcIndex && emAsmAddr));
   assert(func.length == numCallArgs, "Call args mismatch in _emscripten_receive_on_main_thread_js");
   PThread.currentProxiedOperationCallerThread = callingThread;
@@ -2413,22 +2526,6 @@ function __emscripten_thread_cleanup(thread) {
 
 function __emscripten_thread_set_strongref(thread) {
   thread >>>= 0;
-}
-
-var requireRegisteredType = (rawType, humanName) => {
-  var impl = registeredTypes[rawType];
-  if (undefined === impl) {
-    throwBindingError(`${humanName} has unknown type ${getTypeName(rawType)}`);
-  }
-  return impl;
-};
-
-function __emval_take_value(type, arg) {
-  type >>>= 0;
-  arg >>>= 0;
-  type = requireRegisteredType(type, "_emval_take_value");
-  var v = type["readValueFromPointer"](arg);
-  return Emval.toHandle(v);
 }
 
 var isLeapYear = year => year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
@@ -2582,6 +2679,390 @@ function __wasmfs_get_preloaded_path_name(index, fileNameBuffer) {
   stringToUTF8(s, fileNameBuffer, len);
 }
 
+class HandleAllocator {
+  constructor() {
+    this.allocated = [ undefined ];
+    this.freelist = [];
+  }
+  get(id) {
+    assert(this.allocated[id] !== undefined, `invalid handle: ${id}`);
+    return this.allocated[id];
+  }
+  has(id) {
+    return this.allocated[id] !== undefined;
+  }
+  allocate(handle) {
+    var id = this.freelist.pop() || this.allocated.length;
+    this.allocated[id] = handle;
+    return id;
+  }
+  free(id) {
+    assert(this.allocated[id] !== undefined);
+    this.allocated[id] = undefined;
+    this.freelist.push(id);
+  }
+}
+
+var wasmfsOPFSAccessHandles = new HandleAllocator;
+
+var wasmfsOPFSProxyFinish = ctx => {
+  _emscripten_proxy_finish(ctx);
+};
+
+async function __wasmfs_opfs_close_access(ctx, accessID, errPtr) {
+  ctx >>>= 0;
+  errPtr >>>= 0;
+  let accessHandle = wasmfsOPFSAccessHandles.get(accessID);
+  try {
+    await accessHandle.close();
+  } catch {
+    let err = -29;
+    GROWABLE_HEAP_I32()[((errPtr) >>> 2) >>> 0] = err;
+  }
+  wasmfsOPFSAccessHandles.free(accessID);
+  wasmfsOPFSProxyFinish(ctx);
+}
+
+var wasmfsOPFSBlobs = new HandleAllocator;
+
+var __wasmfs_opfs_close_blob = blobID => {
+  wasmfsOPFSBlobs.free(blobID);
+};
+
+async function __wasmfs_opfs_flush_access(ctx, accessID, errPtr) {
+  ctx >>>= 0;
+  errPtr >>>= 0;
+  let accessHandle = wasmfsOPFSAccessHandles.get(accessID);
+  try {
+    await accessHandle.flush();
+  } catch {
+    let err = -29;
+    GROWABLE_HEAP_I32()[((errPtr) >>> 2) >>> 0] = err;
+  }
+  wasmfsOPFSProxyFinish(ctx);
+}
+
+var wasmfsOPFSDirectoryHandles = new HandleAllocator;
+
+var __wasmfs_opfs_free_directory = dirID => {
+  wasmfsOPFSDirectoryHandles.free(dirID);
+};
+
+var wasmfsOPFSFileHandles = new HandleAllocator;
+
+var __wasmfs_opfs_free_file = fileID => {
+  wasmfsOPFSFileHandles.free(fileID);
+};
+
+async function wasmfsOPFSGetOrCreateFile(parent, name, create) {
+  let parentHandle = wasmfsOPFSDirectoryHandles.get(parent);
+  let fileHandle;
+  try {
+    fileHandle = await parentHandle.getFileHandle(name, {
+      create: create
+    });
+  } catch (e) {
+    if (e.name === "NotFoundError") {
+      return -20;
+    }
+    if (e.name === "TypeMismatchError") {
+      return -31;
+    }
+    err("unexpected error:", e, e.stack);
+    return -29;
+  }
+  return wasmfsOPFSFileHandles.allocate(fileHandle);
+}
+
+async function wasmfsOPFSGetOrCreateDir(parent, name, create) {
+  let parentHandle = wasmfsOPFSDirectoryHandles.get(parent);
+  let childHandle;
+  try {
+    childHandle = await parentHandle.getDirectoryHandle(name, {
+      create: create
+    });
+  } catch (e) {
+    if (e.name === "NotFoundError") {
+      return -20;
+    }
+    if (e.name === "TypeMismatchError") {
+      return -54;
+    }
+    err("unexpected error:", e, e.stack);
+    return -29;
+  }
+  return wasmfsOPFSDirectoryHandles.allocate(childHandle);
+}
+
+async function __wasmfs_opfs_get_child(ctx, parent, namePtr, childTypePtr, childIDPtr) {
+  ctx >>>= 0;
+  namePtr >>>= 0;
+  childTypePtr >>>= 0;
+  childIDPtr >>>= 0;
+  let name = UTF8ToString(namePtr);
+  let childType = 1;
+  let childID = await wasmfsOPFSGetOrCreateFile(parent, name, false);
+  if (childID == -31) {
+    childType = 2;
+    childID = await wasmfsOPFSGetOrCreateDir(parent, name, false);
+  }
+  GROWABLE_HEAP_I32()[((childTypePtr) >>> 2) >>> 0] = childType;
+  GROWABLE_HEAP_I32()[((childIDPtr) >>> 2) >>> 0] = childID;
+  wasmfsOPFSProxyFinish(ctx);
+}
+
+async function __wasmfs_opfs_get_entries(ctx, dirID, entriesPtr, errPtr) {
+  ctx >>>= 0;
+  entriesPtr >>>= 0;
+  errPtr >>>= 0;
+  let dirHandle = wasmfsOPFSDirectoryHandles.get(dirID);
+  try {
+    let iter = dirHandle.entries();
+    for (let entry; entry = await iter.next(), !entry.done; ) {
+      let [name, child] = entry.value;
+      let sp = stackSave();
+      let namePtr = stringToUTF8OnStack(name);
+      let type = child.kind == "file" ? 1 : 2;
+      __wasmfs_opfs_record_entry(entriesPtr, namePtr, type);
+      stackRestore(sp);
+    }
+  } catch {
+    let err = -29;
+    GROWABLE_HEAP_I32()[((errPtr) >>> 2) >>> 0] = err;
+  }
+  wasmfsOPFSProxyFinish(ctx);
+}
+
+async function __wasmfs_opfs_get_size_access(ctx, accessID, sizePtr) {
+  ctx >>>= 0;
+  sizePtr >>>= 0;
+  let accessHandle = wasmfsOPFSAccessHandles.get(accessID);
+  let size;
+  try {
+    size = await accessHandle.getSize();
+  } catch {
+    size = -29;
+  }
+  (tempI64 = [ size >>> 0, (tempDouble = size, (+(Math.abs(tempDouble))) >= 1 ? (tempDouble > 0 ? (+(Math.floor((tempDouble) / 4294967296))) >>> 0 : (~~((+(Math.ceil((tempDouble - +(((~~(tempDouble))) >>> 0)) / 4294967296))))) >>> 0) : 0) ], 
+  GROWABLE_HEAP_I32()[((sizePtr) >>> 2) >>> 0] = tempI64[0], GROWABLE_HEAP_I32()[(((sizePtr) + (4)) >>> 2) >>> 0] = tempI64[1]);
+  wasmfsOPFSProxyFinish(ctx);
+}
+
+var __wasmfs_opfs_get_size_blob = blobID => wasmfsOPFSBlobs.get(blobID).size;
+
+async function __wasmfs_opfs_get_size_file(ctx, fileID, sizePtr) {
+  ctx >>>= 0;
+  sizePtr >>>= 0;
+  let fileHandle = wasmfsOPFSFileHandles.get(fileID);
+  let size;
+  try {
+    size = (await fileHandle.getFile()).size;
+  } catch {
+    size = -29;
+  }
+  (tempI64 = [ size >>> 0, (tempDouble = size, (+(Math.abs(tempDouble))) >= 1 ? (tempDouble > 0 ? (+(Math.floor((tempDouble) / 4294967296))) >>> 0 : (~~((+(Math.ceil((tempDouble - +(((~~(tempDouble))) >>> 0)) / 4294967296))))) >>> 0) : 0) ], 
+  GROWABLE_HEAP_I32()[((sizePtr) >>> 2) >>> 0] = tempI64[0], GROWABLE_HEAP_I32()[(((sizePtr) + (4)) >>> 2) >>> 0] = tempI64[1]);
+  wasmfsOPFSProxyFinish(ctx);
+}
+
+async function __wasmfs_opfs_init_root_directory(ctx) {
+  ctx >>>= 0;
+  if (wasmfsOPFSDirectoryHandles.allocated.length == 1) {
+    /** @suppress {checkTypes} */ let root = await navigator.storage.getDirectory();
+    wasmfsOPFSDirectoryHandles.allocated.push(root);
+  }
+  wasmfsOPFSProxyFinish(ctx);
+}
+
+async function __wasmfs_opfs_insert_directory(ctx, parent, namePtr, childIDPtr) {
+  ctx >>>= 0;
+  namePtr >>>= 0;
+  childIDPtr >>>= 0;
+  let name = UTF8ToString(namePtr);
+  let childID = await wasmfsOPFSGetOrCreateDir(parent, name, true);
+  GROWABLE_HEAP_I32()[((childIDPtr) >>> 2) >>> 0] = childID;
+  wasmfsOPFSProxyFinish(ctx);
+}
+
+async function __wasmfs_opfs_insert_file(ctx, parent, namePtr, childIDPtr) {
+  ctx >>>= 0;
+  namePtr >>>= 0;
+  childIDPtr >>>= 0;
+  let name = UTF8ToString(namePtr);
+  let childID = await wasmfsOPFSGetOrCreateFile(parent, name, true);
+  GROWABLE_HEAP_I32()[((childIDPtr) >>> 2) >>> 0] = childID;
+  wasmfsOPFSProxyFinish(ctx);
+}
+
+async function __wasmfs_opfs_move_file(ctx, fileID, newParentID, namePtr, errPtr) {
+  ctx >>>= 0;
+  namePtr >>>= 0;
+  errPtr >>>= 0;
+  let name = UTF8ToString(namePtr);
+  let fileHandle = wasmfsOPFSFileHandles.get(fileID);
+  let newDirHandle = wasmfsOPFSDirectoryHandles.get(newParentID);
+  try {
+    await fileHandle.move(newDirHandle, name);
+  } catch {
+    let err = -29;
+    GROWABLE_HEAP_I32()[((errPtr) >>> 2) >>> 0] = err;
+  }
+  wasmfsOPFSProxyFinish(ctx);
+}
+
+async function __wasmfs_opfs_open_access(ctx, fileID, accessIDPtr) {
+  ctx >>>= 0;
+  accessIDPtr >>>= 0;
+  let fileHandle = wasmfsOPFSFileHandles.get(fileID);
+  let accessID;
+  try {
+    let accessHandle;
+    /** @suppress {checkTypes} */ var len = FileSystemFileHandle.prototype.createSyncAccessHandle.length;
+    if (len == 0) {
+      accessHandle = await fileHandle.createSyncAccessHandle();
+    } else {
+      accessHandle = await fileHandle.createSyncAccessHandle({
+        mode: "in-place"
+      });
+    }
+    accessID = wasmfsOPFSAccessHandles.allocate(accessHandle);
+  } catch (e) {
+    if (e.name === "InvalidStateError" || e.name === "NoModificationAllowedError") {
+      accessID = -2;
+    } else {
+      err("unexpected error:", e, e.stack);
+      accessID = -29;
+    }
+  }
+  GROWABLE_HEAP_I32()[((accessIDPtr) >>> 2) >>> 0] = accessID;
+  wasmfsOPFSProxyFinish(ctx);
+}
+
+async function __wasmfs_opfs_open_blob(ctx, fileID, blobIDPtr) {
+  ctx >>>= 0;
+  blobIDPtr >>>= 0;
+  let fileHandle = wasmfsOPFSFileHandles.get(fileID);
+  let blobID;
+  try {
+    let blob = await fileHandle.getFile();
+    blobID = wasmfsOPFSBlobs.allocate(blob);
+  } catch (e) {
+    if (e.name === "NotAllowedError") {
+      blobID = -2;
+    } else {
+      err("unexpected error:", e, e.stack);
+      blobID = -29;
+    }
+  }
+  GROWABLE_HEAP_I32()[((blobIDPtr) >>> 2) >>> 0] = blobID;
+  wasmfsOPFSProxyFinish(ctx);
+}
+
+function __wasmfs_opfs_read_access(accessID, bufPtr, len, pos) {
+  bufPtr >>>= 0;
+  let accessHandle = wasmfsOPFSAccessHandles.get(accessID);
+  let data = GROWABLE_HEAP_U8().subarray(bufPtr >>> 0, bufPtr + len >>> 0);
+  try {
+    return accessHandle.read(data, {
+      at: pos
+    });
+  } catch (e) {
+    if (e.name == "TypeError") {
+      return -28;
+    }
+    err("unexpected error:", e, e.stack);
+    return -29;
+  }
+}
+
+async function __wasmfs_opfs_read_blob(ctx, blobID, bufPtr, len, pos, nreadPtr) {
+  ctx >>>= 0;
+  bufPtr >>>= 0;
+  nreadPtr >>>= 0;
+  let blob = wasmfsOPFSBlobs.get(blobID);
+  let slice = blob.slice(pos, pos + len);
+  let nread = 0;
+  try {
+    let buf = await slice.arrayBuffer();
+    let data = new Uint8Array(buf);
+    GROWABLE_HEAP_U8().set(data, bufPtr >>> 0);
+    nread += data.length;
+  } catch (e) {
+    if (e instanceof RangeError) {
+      nread = -21;
+    } else {
+      err("unexpected error:", e, e.stack);
+      nread = -29;
+    }
+  }
+  GROWABLE_HEAP_I32()[((nreadPtr) >>> 2) >>> 0] = nread;
+  wasmfsOPFSProxyFinish(ctx);
+}
+
+async function __wasmfs_opfs_remove_child(ctx, dirID, namePtr, errPtr) {
+  ctx >>>= 0;
+  namePtr >>>= 0;
+  errPtr >>>= 0;
+  let name = UTF8ToString(namePtr);
+  let dirHandle = wasmfsOPFSDirectoryHandles.get(dirID);
+  try {
+    await dirHandle.removeEntry(name);
+  } catch {
+    let err = -29;
+    GROWABLE_HEAP_I32()[((errPtr) >>> 2) >>> 0] = err;
+  }
+  wasmfsOPFSProxyFinish(ctx);
+}
+
+async function __wasmfs_opfs_set_size_access(ctx, accessID, size_low, size_high, errPtr) {
+  ctx >>>= 0;
+  var size = convertI32PairToI53Checked(size_low, size_high);
+  errPtr >>>= 0;
+  let accessHandle = wasmfsOPFSAccessHandles.get(accessID);
+  try {
+    await accessHandle.truncate(size);
+  } catch {
+    let err = -29;
+    GROWABLE_HEAP_I32()[((errPtr) >>> 2) >>> 0] = err;
+  }
+  wasmfsOPFSProxyFinish(ctx);
+}
+
+async function __wasmfs_opfs_set_size_file(ctx, fileID, size_low, size_high, errPtr) {
+  ctx >>>= 0;
+  var size = convertI32PairToI53Checked(size_low, size_high);
+  errPtr >>>= 0;
+  let fileHandle = wasmfsOPFSFileHandles.get(fileID);
+  try {
+    let writable = await fileHandle.createWritable({
+      keepExistingData: true
+    });
+    await writable.truncate(size);
+    await writable.close();
+  } catch {
+    let err = -29;
+    GROWABLE_HEAP_I32()[((errPtr) >>> 2) >>> 0] = err;
+  }
+  wasmfsOPFSProxyFinish(ctx);
+}
+
+function __wasmfs_opfs_write_access(accessID, bufPtr, len, pos) {
+  bufPtr >>>= 0;
+  let accessHandle = wasmfsOPFSAccessHandles.get(accessID);
+  let data = GROWABLE_HEAP_U8().subarray(bufPtr >>> 0, bufPtr + len >>> 0);
+  try {
+    return accessHandle.write(data, {
+      at: pos
+    });
+  } catch (e) {
+    if (e.name == "TypeError") {
+      return -28;
+    }
+    err("unexpected error:", e, e.stack);
+    return -29;
+  }
+}
+
 var FS_stdin_getChar_buffer = [];
 
 /** @type {function(string, boolean=, number=)} */ function intArrayFromString(stringy, dontAddNull, length) {
@@ -2617,6 +3098,53 @@ var __wasmfs_stdin_get_char = () => {
   return -1;
 };
 
+var __wasmfs_thread_utils_heartbeat = function(queue) {
+  queue >>>= 0;
+  var intervalID = setInterval(() => {
+    if (ABORT) {
+      clearInterval(intervalID);
+    } else {
+      _emscripten_proxy_execute_queue(queue);
+    }
+  }, 50);
+};
+
+var readEmAsmArgsArray = [];
+
+var readEmAsmArgs = (sigPtr, buf) => {
+  assert(Array.isArray(readEmAsmArgsArray));
+  assert(buf % 16 == 0);
+  readEmAsmArgsArray.length = 0;
+  var ch;
+  while (ch = GROWABLE_HEAP_U8()[sigPtr++ >>> 0]) {
+    var chr = String.fromCharCode(ch);
+    var validChars = [ "d", "f", "i", "p" ];
+    assert(validChars.includes(chr), `Invalid character ${ch}("${chr}") in readEmAsmArgs! Use only [${validChars}], and do not specify "v" for void return argument.`);
+    var wide = (ch != 105);
+    wide &= (ch != 112);
+    buf += wide && (buf % 8) ? 4 : 0;
+    readEmAsmArgsArray.push(ch == 112 ? GROWABLE_HEAP_U32()[((buf) >>> 2) >>> 0] : ch == 105 ? GROWABLE_HEAP_I32()[((buf) >>> 2) >>> 0] : GROWABLE_HEAP_F64()[((buf) >>> 3) >>> 0]);
+    buf += wide ? 8 : 4;
+  }
+  return readEmAsmArgsArray;
+};
+
+var runMainThreadEmAsm = (emAsmAddr, sigPtr, argbuf, sync) => {
+  var args = readEmAsmArgs(sigPtr, argbuf);
+  if (ENVIRONMENT_IS_PTHREAD) {
+    return proxyToMainThread(0, emAsmAddr, sync, ...args);
+  }
+  assert(ASM_CONSTS.hasOwnProperty(emAsmAddr), `No EM_ASM constant found at address ${emAsmAddr}.  The loaded WebAssembly file is likely out of sync with the generated JavaScript.`);
+  return ASM_CONSTS[emAsmAddr](...args);
+};
+
+function _emscripten_asm_const_int_sync_on_main_thread(emAsmAddr, sigPtr, argbuf) {
+  emAsmAddr >>>= 0;
+  sigPtr >>>= 0;
+  argbuf >>>= 0;
+  return runMainThreadEmAsm(emAsmAddr, sigPtr, argbuf, 1);
+}
+
 var _emscripten_check_blocking_allowed = () => {
   if (ENVIRONMENT_IS_WORKER) return;
   warnOnce("Blocking on the main thread is very dangerous, see https://emscripten.org/docs/porting/pthreads.html#blocking-on-the-main-browser-thread");
@@ -2641,6 +3169,8 @@ var _emscripten_exit_with_live_runtime = () => {
 var _emscripten_get_now;
 
 _emscripten_get_now = () => performance.timeOrigin + performance.now();
+
+var _emscripten_has_asyncify = () => 0;
 
 function _emscripten_out(str) {
   str >>>= 0;
@@ -2686,6 +3216,10 @@ function _emscripten_resize_heap(requestedSize) {
   return false;
 }
 
+var _emscripten_unwind_to_js_event_loop = () => {
+  throw "unwind";
+};
+
 var ENV = {};
 
 var getExecutableName = () => thisProgram || "./this.program";
@@ -2723,7 +3257,7 @@ var stringToAscii = (str, buffer) => {
 };
 
 var _environ_get = function(__environ, environ_buf) {
-  if (ENVIRONMENT_IS_PTHREAD) return proxyToMainThread(2, 0, 1, __environ, environ_buf);
+  if (ENVIRONMENT_IS_PTHREAD) return proxyToMainThread(3, 0, 1, __environ, environ_buf);
   __environ >>>= 0;
   environ_buf >>>= 0;
   var bufSize = 0;
@@ -2737,7 +3271,7 @@ var _environ_get = function(__environ, environ_buf) {
 };
 
 var _environ_sizes_get = function(penviron_count, penviron_buf_size) {
-  if (ENVIRONMENT_IS_PTHREAD) return proxyToMainThread(3, 0, 1, penviron_count, penviron_buf_size);
+  if (ENVIRONMENT_IS_PTHREAD) return proxyToMainThread(4, 0, 1, penviron_count, penviron_buf_size);
   penviron_count >>>= 0;
   penviron_buf_size >>>= 0;
   var strings = getEnvStrings();
@@ -2786,7 +3320,7 @@ init_emval();
 
 UnboundTypeError = Module["UnboundTypeError"] = extendError(Error, "UnboundTypeError");
 
-var proxiedFunctionTable = [ _proc_exit, exitOnMainThread, _environ_get, _environ_sizes_get ];
+var proxiedFunctionTable = [ _proc_exit, exitOnMainThread, pthreadCreateProxied, _environ_get, _environ_sizes_get ];
 
 function checkIncomingModuleAPI() {
   ignoredModuleProp("fetchSettings");
@@ -2797,10 +3331,12 @@ var wasmImports;
 function assignWasmImports() {
   wasmImports = {
     /** @export */ __assert_fail: ___assert_fail,
+    /** @export */ __cxa_throw: ___cxa_throw,
+    /** @export */ __pthread_create_js: ___pthread_create_js,
+    /** @export */ __pthread_kill_js: ___pthread_kill_js,
     /** @export */ _abort_js: __abort_js,
     /** @export */ _embind_register_bigint: __embind_register_bigint,
     /** @export */ _embind_register_bool: __embind_register_bool,
-    /** @export */ _embind_register_constant: __embind_register_constant,
     /** @export */ _embind_register_emval: __embind_register_emval,
     /** @export */ _embind_register_float: __embind_register_float,
     /** @export */ _embind_register_function: __embind_register_function,
@@ -2816,8 +3352,6 @@ function assignWasmImports() {
     /** @export */ _emscripten_thread_cleanup: __emscripten_thread_cleanup,
     /** @export */ _emscripten_thread_mailbox_await: __emscripten_thread_mailbox_await,
     /** @export */ _emscripten_thread_set_strongref: __emscripten_thread_set_strongref,
-    /** @export */ _emval_decref: __emval_decref,
-    /** @export */ _emval_take_value: __emval_take_value,
     /** @export */ _localtime_js: __localtime_js,
     /** @export */ _mktime_js: __mktime_js,
     /** @export */ _tzset_js: __tzset_js,
@@ -2829,14 +3363,40 @@ function assignWasmImports() {
     /** @export */ _wasmfs_get_preloaded_file_size: __wasmfs_get_preloaded_file_size,
     /** @export */ _wasmfs_get_preloaded_parent_path: __wasmfs_get_preloaded_parent_path,
     /** @export */ _wasmfs_get_preloaded_path_name: __wasmfs_get_preloaded_path_name,
+    /** @export */ _wasmfs_opfs_close_access: __wasmfs_opfs_close_access,
+    /** @export */ _wasmfs_opfs_close_blob: __wasmfs_opfs_close_blob,
+    /** @export */ _wasmfs_opfs_flush_access: __wasmfs_opfs_flush_access,
+    /** @export */ _wasmfs_opfs_free_directory: __wasmfs_opfs_free_directory,
+    /** @export */ _wasmfs_opfs_free_file: __wasmfs_opfs_free_file,
+    /** @export */ _wasmfs_opfs_get_child: __wasmfs_opfs_get_child,
+    /** @export */ _wasmfs_opfs_get_entries: __wasmfs_opfs_get_entries,
+    /** @export */ _wasmfs_opfs_get_size_access: __wasmfs_opfs_get_size_access,
+    /** @export */ _wasmfs_opfs_get_size_blob: __wasmfs_opfs_get_size_blob,
+    /** @export */ _wasmfs_opfs_get_size_file: __wasmfs_opfs_get_size_file,
+    /** @export */ _wasmfs_opfs_init_root_directory: __wasmfs_opfs_init_root_directory,
+    /** @export */ _wasmfs_opfs_insert_directory: __wasmfs_opfs_insert_directory,
+    /** @export */ _wasmfs_opfs_insert_file: __wasmfs_opfs_insert_file,
+    /** @export */ _wasmfs_opfs_move_file: __wasmfs_opfs_move_file,
+    /** @export */ _wasmfs_opfs_open_access: __wasmfs_opfs_open_access,
+    /** @export */ _wasmfs_opfs_open_blob: __wasmfs_opfs_open_blob,
+    /** @export */ _wasmfs_opfs_read_access: __wasmfs_opfs_read_access,
+    /** @export */ _wasmfs_opfs_read_blob: __wasmfs_opfs_read_blob,
+    /** @export */ _wasmfs_opfs_remove_child: __wasmfs_opfs_remove_child,
+    /** @export */ _wasmfs_opfs_set_size_access: __wasmfs_opfs_set_size_access,
+    /** @export */ _wasmfs_opfs_set_size_file: __wasmfs_opfs_set_size_file,
+    /** @export */ _wasmfs_opfs_write_access: __wasmfs_opfs_write_access,
     /** @export */ _wasmfs_stdin_get_char: __wasmfs_stdin_get_char,
+    /** @export */ _wasmfs_thread_utils_heartbeat: __wasmfs_thread_utils_heartbeat,
+    /** @export */ emscripten_asm_const_int_sync_on_main_thread: _emscripten_asm_const_int_sync_on_main_thread,
     /** @export */ emscripten_check_blocking_allowed: _emscripten_check_blocking_allowed,
     /** @export */ emscripten_date_now: _emscripten_date_now,
     /** @export */ emscripten_err: _emscripten_err,
     /** @export */ emscripten_exit_with_live_runtime: _emscripten_exit_with_live_runtime,
     /** @export */ emscripten_get_now: _emscripten_get_now,
+    /** @export */ emscripten_has_asyncify: _emscripten_has_asyncify,
     /** @export */ emscripten_out: _emscripten_out,
     /** @export */ emscripten_resize_heap: _emscripten_resize_heap,
+    /** @export */ emscripten_unwind_to_js_event_loop: _emscripten_unwind_to_js_event_loop,
     /** @export */ environ_get: _environ_get,
     /** @export */ environ_sizes_get: _environ_sizes_get,
     /** @export */ exit: _exit,
@@ -2872,9 +3432,13 @@ var _emscripten_main_thread_process_queued_calls = createExportWrapper("emscript
 
 var _emscripten_main_runtime_thread_id = createExportWrapper("emscripten_main_runtime_thread_id", 0);
 
+var _emscripten_proxy_execute_queue = createExportWrapper("emscripten_proxy_execute_queue", 1);
+
 var _emscripten_stack_get_base = () => (_emscripten_stack_get_base = wasmExports["emscripten_stack_get_base"])();
 
 var _emscripten_stack_get_end = () => (_emscripten_stack_get_end = wasmExports["emscripten_stack_get_end"])();
+
+var _emscripten_proxy_finish = createExportWrapper("emscripten_proxy_finish", 1);
 
 var __emscripten_run_on_main_thread_js = createExportWrapper("_emscripten_run_on_main_thread_js", 5);
 
@@ -2900,15 +3464,17 @@ var _emscripten_stack_get_current = () => (_emscripten_stack_get_current = wasmE
 
 var ___cxa_is_pointer_type = createExportWrapper("__cxa_is_pointer_type", 1);
 
+var __wasmfs_opfs_record_entry = createExportWrapper("_wasmfs_opfs_record_entry", 3);
+
 var _wasmfs_flush = createExportWrapper("wasmfs_flush", 0);
 
 var dynCall_jii = Module["dynCall_jii"] = createExportWrapper("dynCall_jii", 3);
 
 var dynCall_jiji = Module["dynCall_jiji"] = createExportWrapper("dynCall_jiji", 5);
 
-var dynCall_jiiji = Module["dynCall_jiiji"] = createExportWrapper("dynCall_jiiji", 6);
-
 var dynCall_jiij = Module["dynCall_jiij"] = createExportWrapper("dynCall_jiij", 5);
+
+var dynCall_jiiji = Module["dynCall_jiiji"] = createExportWrapper("dynCall_jiiji", 6);
 
 var dynCall_ji = Module["dynCall_ji"] = createExportWrapper("dynCall_ji", 2);
 
@@ -2931,11 +3497,11 @@ function applySignatureConversions(wasmExports) {
   return wasmExports;
 }
 
-var missingLibrarySymbols = [ "writeI53ToI64", "writeI53ToI64Clamped", "writeI53ToI64Signaling", "writeI53ToU64Clamped", "writeI53ToU64Signaling", "readI53FromI64", "readI53FromU64", "convertI32PairToI53", "convertU32PairToI53", "getTempRet0", "arraySum", "addDays", "inetPton4", "inetNtop4", "inetPton6", "inetNtop6", "readSockaddr", "writeSockaddr", "emscriptenLog", "readEmAsmArgs", "jstoi_q", "listenOnce", "autoResumeAudioContext", "runtimeKeepalivePop", "asmjsMangle", "asyncLoad", "alignMemory", "mmapAlloc", "HandleAllocator", "getNativeTypeSize", "STACK_SIZE", "STACK_ALIGN", "POINTER_SIZE", "ASSERTIONS", "getCFunc", "ccall", "cwrap", "uleb128Encode", "sigToWasmTypes", "generateFuncType", "convertJsFunctionToWasm", "getEmptyTableSlot", "updateTableMap", "getFunctionAddress", "addFunction", "removeFunction", "reallyNegative", "unSign", "strLen", "reSign", "formatString", "intArrayToString", "AsciiToString", "stringToNewUTF8", "stringToUTF8OnStack", "writeArrayToMemory", "registerKeyEventCallback", "maybeCStringToJsString", "findEventTarget", "getBoundingClientRect", "fillMouseEventData", "registerMouseEventCallback", "registerWheelEventCallback", "registerUiEventCallback", "registerFocusEventCallback", "fillDeviceOrientationEventData", "registerDeviceOrientationEventCallback", "fillDeviceMotionEventData", "registerDeviceMotionEventCallback", "screenOrientation", "fillOrientationChangeEventData", "registerOrientationChangeEventCallback", "fillFullscreenChangeEventData", "registerFullscreenChangeEventCallback", "JSEvents_requestFullscreen", "JSEvents_resizeCanvasForFullscreen", "registerRestoreOldStyle", "hideEverythingExceptGivenElement", "restoreHiddenElements", "setLetterbox", "softFullscreenResizeWebGLRenderTarget", "doRequestFullscreen", "fillPointerlockChangeEventData", "registerPointerlockChangeEventCallback", "registerPointerlockErrorEventCallback", "requestPointerLock", "fillVisibilityChangeEventData", "registerVisibilityChangeEventCallback", "registerTouchEventCallback", "fillGamepadEventData", "registerGamepadEventCallback", "registerBeforeUnloadEventCallback", "fillBatteryEventData", "battery", "registerBatteryEventCallback", "setCanvasElementSizeCallingThread", "setCanvasElementSizeMainThread", "setCanvasElementSize", "getCanvasSizeCallingThread", "getCanvasSizeMainThread", "getCanvasElementSize", "jsStackTrace", "getCallstack", "convertPCtoSourceLocation", "checkWasiClock", "flush_NO_FILESYSTEM", "wasiRightsToMuslOFlags", "wasiOFlagsToMuslOFlags", "createDyncallWrapper", "safeSetTimeout", "setImmediateWrapped", "clearImmediateWrapped", "polyfillSetImmediate", "getPromise", "makePromise", "idsToPromises", "makePromiseCallback", "ExceptionInfo", "findMatchingCatch", "Browser_asyncPrepareDataCounter", "setMainLoop", "FS_createPreloadedFile", "FS_modeStringToFlags", "FS_getMode", "FS_unlink", "FS_createDataFile", "FS_mknod", "FS_create", "FS_writeFile", "FS_mkdir", "FS_mkdirTree", "wasmfsNodeConvertNodeCode", "wasmfsTry", "wasmfsNodeFixStat", "wasmfsNodeLstat", "wasmfsNodeFstat", "wasmfsOPFSProxyFinish", "wasmfsOPFSGetOrCreateFile", "wasmfsOPFSGetOrCreateDir", "heapObjectForWebGLType", "toTypedArrayIndex", "webgl_enable_ANGLE_instanced_arrays", "webgl_enable_OES_vertex_array_object", "webgl_enable_WEBGL_draw_buffers", "webgl_enable_WEBGL_multi_draw", "emscriptenWebGLGet", "computeUnpackAlignedImageSize", "colorChannelsInGlTextureFormat", "emscriptenWebGLGetTexPixelData", "emscriptenWebGLGetUniform", "webglGetUniformLocation", "webglPrepareUniformLocationsBeforeFirstUse", "webglGetLeftBracePos", "emscriptenWebGLGetVertexAttrib", "__glGetActiveAttribOrUniform", "writeGLArray", "emscripten_webgl_destroy_context_before_on_calling_thread", "registerWebGlEventCallback", "runAndAbortIfError", "ALLOC_NORMAL", "ALLOC_STACK", "allocate", "writeStringToMemory", "writeAsciiToMemory", "setErrNo", "demangle", "stackTrace", "getFunctionArgsName", "createJsInvokerSignature", "init_embind", "getBasestPointer", "registerInheritedInstance", "unregisterInheritedInstance", "getInheritedInstance", "getInheritedInstanceCount", "getLiveInheritedInstances", "enumReadValueFromPointer", "genericPointerToWireType", "constNoSmartPtrRawPointerToWireType", "nonConstNoSmartPtrRawPointerToWireType", "init_RegisteredPointer", "RegisteredPointer", "RegisteredPointer_fromWireType", "runDestructor", "releaseClassHandle", "detachFinalizer", "attachFinalizer", "makeClassHandle", "init_ClassHandle", "ClassHandle", "throwInstanceAlreadyDeleted", "flushPendingDeletes", "setDelayFunction", "RegisteredClass", "shallowCopyInternalPointer", "downcastPointer", "upcastPointer", "validateThis", "char_0", "char_9", "makeLegalFunctionName", "getStringOrSymbol", "emval_get_global", "emval_returnValue", "emval_lookupTypes", "emval_addMethodCaller" ];
+var missingLibrarySymbols = [ "writeI53ToI64", "writeI53ToI64Clamped", "writeI53ToI64Signaling", "writeI53ToU64Clamped", "writeI53ToU64Signaling", "readI53FromI64", "readI53FromU64", "convertI32PairToI53", "convertU32PairToI53", "getTempRet0", "arraySum", "addDays", "inetPton4", "inetNtop4", "inetPton6", "inetNtop6", "readSockaddr", "writeSockaddr", "emscriptenLog", "runEmAsmFunction", "jstoi_q", "listenOnce", "autoResumeAudioContext", "runtimeKeepalivePop", "asmjsMangle", "asyncLoad", "alignMemory", "mmapAlloc", "getNativeTypeSize", "STACK_SIZE", "STACK_ALIGN", "POINTER_SIZE", "ASSERTIONS", "getCFunc", "ccall", "cwrap", "uleb128Encode", "sigToWasmTypes", "generateFuncType", "convertJsFunctionToWasm", "getEmptyTableSlot", "updateTableMap", "getFunctionAddress", "addFunction", "removeFunction", "reallyNegative", "unSign", "strLen", "reSign", "formatString", "intArrayToString", "AsciiToString", "stringToNewUTF8", "stringToUTF8OnStack", "writeArrayToMemory", "registerKeyEventCallback", "maybeCStringToJsString", "findEventTarget", "getBoundingClientRect", "fillMouseEventData", "registerMouseEventCallback", "registerWheelEventCallback", "registerUiEventCallback", "registerFocusEventCallback", "fillDeviceOrientationEventData", "registerDeviceOrientationEventCallback", "fillDeviceMotionEventData", "registerDeviceMotionEventCallback", "screenOrientation", "fillOrientationChangeEventData", "registerOrientationChangeEventCallback", "fillFullscreenChangeEventData", "registerFullscreenChangeEventCallback", "JSEvents_requestFullscreen", "JSEvents_resizeCanvasForFullscreen", "registerRestoreOldStyle", "hideEverythingExceptGivenElement", "restoreHiddenElements", "setLetterbox", "softFullscreenResizeWebGLRenderTarget", "doRequestFullscreen", "fillPointerlockChangeEventData", "registerPointerlockChangeEventCallback", "registerPointerlockErrorEventCallback", "requestPointerLock", "fillVisibilityChangeEventData", "registerVisibilityChangeEventCallback", "registerTouchEventCallback", "fillGamepadEventData", "registerGamepadEventCallback", "registerBeforeUnloadEventCallback", "fillBatteryEventData", "battery", "registerBatteryEventCallback", "setCanvasElementSizeCallingThread", "setCanvasElementSizeMainThread", "setCanvasElementSize", "getCanvasSizeCallingThread", "getCanvasSizeMainThread", "getCanvasElementSize", "jsStackTrace", "getCallstack", "convertPCtoSourceLocation", "checkWasiClock", "flush_NO_FILESYSTEM", "wasiRightsToMuslOFlags", "wasiOFlagsToMuslOFlags", "createDyncallWrapper", "safeSetTimeout", "setImmediateWrapped", "clearImmediateWrapped", "polyfillSetImmediate", "getPromise", "makePromise", "idsToPromises", "makePromiseCallback", "findMatchingCatch", "Browser_asyncPrepareDataCounter", "setMainLoop", "FS_createPreloadedFile", "FS_modeStringToFlags", "FS_getMode", "FS_unlink", "FS_createDataFile", "FS_mknod", "FS_create", "FS_writeFile", "FS_mkdir", "FS_mkdirTree", "wasmfsNodeConvertNodeCode", "wasmfsTry", "wasmfsNodeFixStat", "wasmfsNodeLstat", "wasmfsNodeFstat", "heapObjectForWebGLType", "toTypedArrayIndex", "webgl_enable_ANGLE_instanced_arrays", "webgl_enable_OES_vertex_array_object", "webgl_enable_WEBGL_draw_buffers", "webgl_enable_WEBGL_multi_draw", "emscriptenWebGLGet", "computeUnpackAlignedImageSize", "colorChannelsInGlTextureFormat", "emscriptenWebGLGetTexPixelData", "emscriptenWebGLGetUniform", "webglGetUniformLocation", "webglPrepareUniformLocationsBeforeFirstUse", "webglGetLeftBracePos", "emscriptenWebGLGetVertexAttrib", "__glGetActiveAttribOrUniform", "writeGLArray", "emscripten_webgl_destroy_context_before_on_calling_thread", "registerWebGlEventCallback", "runAndAbortIfError", "ALLOC_NORMAL", "ALLOC_STACK", "allocate", "writeStringToMemory", "writeAsciiToMemory", "setErrNo", "demangle", "stackTrace", "getFunctionArgsName", "requireRegisteredType", "createJsInvokerSignature", "init_embind", "getBasestPointer", "registerInheritedInstance", "unregisterInheritedInstance", "getInheritedInstance", "getInheritedInstanceCount", "getLiveInheritedInstances", "enumReadValueFromPointer", "genericPointerToWireType", "constNoSmartPtrRawPointerToWireType", "nonConstNoSmartPtrRawPointerToWireType", "init_RegisteredPointer", "RegisteredPointer", "RegisteredPointer_fromWireType", "runDestructor", "releaseClassHandle", "detachFinalizer", "attachFinalizer", "makeClassHandle", "init_ClassHandle", "ClassHandle", "throwInstanceAlreadyDeleted", "flushPendingDeletes", "setDelayFunction", "RegisteredClass", "shallowCopyInternalPointer", "downcastPointer", "upcastPointer", "validateThis", "char_0", "char_9", "makeLegalFunctionName", "getStringOrSymbol", "emval_get_global", "emval_returnValue", "emval_lookupTypes", "emval_addMethodCaller" ];
 
 missingLibrarySymbols.forEach(missingLibrarySymbol);
 
-var unexportedSymbols = [ "run", "addOnPreRun", "addOnInit", "addOnPreMain", "addOnExit", "addOnPostRun", "addRunDependency", "removeRunDependency", "out", "err", "callMain", "abort", "wasmMemory", "wasmExports", "GROWABLE_HEAP_I8", "GROWABLE_HEAP_U8", "GROWABLE_HEAP_I16", "GROWABLE_HEAP_U16", "GROWABLE_HEAP_I32", "GROWABLE_HEAP_U32", "GROWABLE_HEAP_F32", "GROWABLE_HEAP_F64", "writeStackCookie", "checkStackCookie", "convertI32PairToI53Checked", "stackSave", "stackRestore", "stackAlloc", "setTempRet0", "ptrToString", "zeroMemory", "exitJS", "getHeapMax", "growMemory", "ENV", "MONTH_DAYS_REGULAR", "MONTH_DAYS_LEAP", "MONTH_DAYS_REGULAR_CUMULATIVE", "MONTH_DAYS_LEAP_CUMULATIVE", "isLeapYear", "ydayFromDate", "ERRNO_CODES", "ERRNO_MESSAGES", "DNS", "Protocols", "Sockets", "initRandomFill", "randomFill", "timers", "warnOnce", "readEmAsmArgsArray", "jstoi_s", "getExecutableName", "dynCallLegacy", "getDynCaller", "dynCall", "handleException", "keepRuntimeAlive", "runtimeKeepalivePush", "callUserCallback", "maybeExit", "wasmTable", "noExitRuntime", "freeTableIndexes", "functionsInTableMap", "setValue", "getValue", "PATH", "PATH_FS", "UTF8Decoder", "UTF8ArrayToString", "UTF8ToString", "stringToUTF8Array", "stringToUTF8", "lengthBytesUTF8", "intArrayFromString", "stringToAscii", "UTF16Decoder", "UTF16ToString", "stringToUTF16", "lengthBytesUTF16", "UTF32ToString", "stringToUTF32", "lengthBytesUTF32", "JSEvents", "specialHTMLTargets", "findCanvasEventTarget", "currentFullscreenStrategy", "restoreOldWindowedStyle", "UNWIND_CACHE", "ExitStatus", "getEnvStrings", "promiseMap", "uncaughtExceptionCount", "exceptionLast", "exceptionCaught", "Browser", "getPreloadedImageData__data", "wget", "preloadPlugins", "FS_stdin_getChar_buffer", "FS_stdin_getChar", "FS_createPath", "FS_createDevice", "FS_readFile", "MEMFS", "wasmFSPreloadedFiles", "wasmFSPreloadedDirs", "wasmFSPreloadingFlushed", "wasmFSDevices", "wasmFSDeviceStreams", "FS", "wasmFS$JSMemoryFiles", "wasmFS$backends", "wasmfsNodeIsWindows", "wasmfsOPFSDirectoryHandles", "wasmfsOPFSFileHandles", "wasmfsOPFSAccessHandles", "wasmfsOPFSBlobs", "tempFixedLengthArray", "miniTempWebGLFloatBuffers", "miniTempWebGLIntBuffers", "GL", "AL", "GLUT", "EGL", "GLEW", "IDBStore", "SDL", "SDL_gfx", "allocateUTF8", "allocateUTF8OnStack", "print", "printErr", "PThread", "terminateWorker", "killThread", "cleanupThread", "registerTLSInit", "cancelThread", "spawnThread", "exitOnMainThread", "proxyToMainThread", "proxiedJSCallArgs", "invokeEntryPoint", "checkMailbox", "InternalError", "BindingError", "throwInternalError", "throwBindingError", "registeredTypes", "awaitingDependencies", "typeDependencies", "tupleRegistrations", "structRegistrations", "sharedRegisterType", "whenDependentTypesAreResolved", "embind_charCodes", "embind_init_charCodes", "readLatin1String", "getTypeName", "getFunctionName", "heap32VectorToArray", "requireRegisteredType", "usesDestructorStack", "createJsInvoker", "UnboundTypeError", "PureVirtualError", "GenericWireTypeSize", "EmValType", "throwUnboundTypeError", "ensureOverloadTable", "exposePublicSymbol", "replacePublicSymbol", "extendError", "createNamedFunction", "embindRepr", "registeredInstances", "registeredPointers", "registerType", "integerReadValueFromPointer", "floatReadValueFromPointer", "readPointer", "runDestructors", "newFunc", "craftInvokerFunction", "embind__requireFunction", "finalizationRegistry", "detachFinalizer_deps", "deletionQueue", "delayFunction", "emval_freelist", "emval_handles", "emval_symbols", "init_emval", "count_emval_handles", "Emval", "emval_methodCallers", "reflectConstruct" ];
+var unexportedSymbols = [ "run", "addOnPreRun", "addOnInit", "addOnPreMain", "addOnExit", "addOnPostRun", "addRunDependency", "removeRunDependency", "out", "err", "callMain", "abort", "wasmMemory", "wasmExports", "GROWABLE_HEAP_I8", "GROWABLE_HEAP_U8", "GROWABLE_HEAP_I16", "GROWABLE_HEAP_U16", "GROWABLE_HEAP_I32", "GROWABLE_HEAP_U32", "GROWABLE_HEAP_F32", "GROWABLE_HEAP_F64", "writeStackCookie", "checkStackCookie", "convertI32PairToI53Checked", "stackSave", "stackRestore", "stackAlloc", "setTempRet0", "ptrToString", "zeroMemory", "exitJS", "getHeapMax", "growMemory", "ENV", "MONTH_DAYS_REGULAR", "MONTH_DAYS_LEAP", "MONTH_DAYS_REGULAR_CUMULATIVE", "MONTH_DAYS_LEAP_CUMULATIVE", "isLeapYear", "ydayFromDate", "ERRNO_CODES", "ERRNO_MESSAGES", "DNS", "Protocols", "Sockets", "initRandomFill", "randomFill", "timers", "warnOnce", "readEmAsmArgsArray", "readEmAsmArgs", "runMainThreadEmAsm", "jstoi_s", "getExecutableName", "dynCallLegacy", "getDynCaller", "dynCall", "handleException", "keepRuntimeAlive", "runtimeKeepalivePush", "callUserCallback", "maybeExit", "HandleAllocator", "wasmTable", "noExitRuntime", "freeTableIndexes", "functionsInTableMap", "setValue", "getValue", "PATH", "PATH_FS", "UTF8Decoder", "UTF8ArrayToString", "UTF8ToString", "stringToUTF8Array", "stringToUTF8", "lengthBytesUTF8", "intArrayFromString", "stringToAscii", "UTF16Decoder", "UTF16ToString", "stringToUTF16", "lengthBytesUTF16", "UTF32ToString", "stringToUTF32", "lengthBytesUTF32", "JSEvents", "specialHTMLTargets", "findCanvasEventTarget", "currentFullscreenStrategy", "restoreOldWindowedStyle", "UNWIND_CACHE", "ExitStatus", "getEnvStrings", "promiseMap", "uncaughtExceptionCount", "exceptionLast", "exceptionCaught", "ExceptionInfo", "Browser", "getPreloadedImageData__data", "wget", "preloadPlugins", "FS_stdin_getChar_buffer", "FS_stdin_getChar", "FS_createPath", "FS_createDevice", "FS_readFile", "MEMFS", "wasmFSPreloadedFiles", "wasmFSPreloadedDirs", "wasmFSPreloadingFlushed", "wasmFSDevices", "wasmFSDeviceStreams", "FS", "wasmFS$JSMemoryFiles", "wasmFS$backends", "wasmfsNodeIsWindows", "wasmfsOPFSDirectoryHandles", "wasmfsOPFSFileHandles", "wasmfsOPFSAccessHandles", "wasmfsOPFSBlobs", "wasmfsOPFSProxyFinish", "wasmfsOPFSGetOrCreateFile", "wasmfsOPFSGetOrCreateDir", "tempFixedLengthArray", "miniTempWebGLFloatBuffers", "miniTempWebGLIntBuffers", "GL", "AL", "GLUT", "EGL", "GLEW", "IDBStore", "SDL", "SDL_gfx", "allocateUTF8", "allocateUTF8OnStack", "print", "printErr", "PThread", "terminateWorker", "killThread", "cleanupThread", "registerTLSInit", "cancelThread", "spawnThread", "exitOnMainThread", "proxyToMainThread", "proxiedJSCallArgs", "invokeEntryPoint", "checkMailbox", "InternalError", "BindingError", "throwInternalError", "throwBindingError", "registeredTypes", "awaitingDependencies", "typeDependencies", "tupleRegistrations", "structRegistrations", "sharedRegisterType", "whenDependentTypesAreResolved", "embind_charCodes", "embind_init_charCodes", "readLatin1String", "getTypeName", "getFunctionName", "heap32VectorToArray", "usesDestructorStack", "createJsInvoker", "UnboundTypeError", "PureVirtualError", "GenericWireTypeSize", "EmValType", "throwUnboundTypeError", "ensureOverloadTable", "exposePublicSymbol", "replacePublicSymbol", "extendError", "createNamedFunction", "embindRepr", "registeredInstances", "registeredPointers", "registerType", "integerReadValueFromPointer", "floatReadValueFromPointer", "readPointer", "runDestructors", "newFunc", "craftInvokerFunction", "embind__requireFunction", "finalizationRegistry", "detachFinalizer_deps", "deletionQueue", "delayFunction", "emval_freelist", "emval_handles", "emval_symbols", "init_emval", "count_emval_handles", "Emval", "emval_methodCallers", "reflectConstruct" ];
 
 unexportedSymbols.forEach(unexportedRuntimeSymbol);
 
