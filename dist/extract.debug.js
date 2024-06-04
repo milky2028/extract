@@ -5863,7 +5863,7 @@ var dynCall_jiiji = Module["dynCall_jiiji"] = createExportWrapper("dynCall_jiiji
 
 var dynCall_jiij = Module["dynCall_jiij"] = createExportWrapper("dynCall_jiij", 5);
 
-var ___heap_base = Module["___heap_base"] = 261744;
+var ___heap_base = Module["___heap_base"] = 261680;
 
 function applySignatureConversions(wasmExports) {
   wasmExports = Object.assign({}, wasmExports);
