@@ -123,20 +123,8 @@ auto get_entry_name(archive_entry* entry) {
 
 void extract_to_disk(std::string job_id, std::string path) {
   std::thread([=] {
-    // This does not actually create a directory in OPFS.
-    // What this does is create virtual directory in WASM and any operations to or from that directory in WASM are
-    // associated with that particular backend. Using wasmfs_create_directory, you could create a directory
-    // structure that looked like:
-    // -- /opfs
-    // -- /idbfs
-    // -- /memfs
-    // and associate each directory with a particular backend. Then any writes from WASM-land that write to /opfs
-    // would write to OPFS, any writes to /memfs would write to memory, and any writes to /idbfs would write to
-    // IndexedDB. This is pretty confusing cause any write to /opfs/somewhere from WASM would actually be written
-    // to the root OPFS file system. If we wanted to write a file from JavaScript and have it be available to
-    // /persistent/my-file.txt, we would actually write to /my-file.txt.
     auto opfs = wasmfs_create_opfs_backend();
-    wasmfs_create_directory("opfs", 0777, opfs);
+    wasmfs_create_directory("/opfs", 0777, opfs);
 
     auto arch = open_archive(path);
     if (arch.has_value()) {
