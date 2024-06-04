@@ -152,12 +152,10 @@ void extract_to_disk(std::string job_id, std::string path) {
     }
 
     // clang-format off
-    MAIN_THREAD_EM_ASM(
-        {
-          const event = new CustomEvent(UTF8ToString($0));
-          dispatchEvent(event);
-        },
-        job_id.c_str());
+    MAIN_THREAD_EM_ASM({
+      const event = new CustomEvent(UTF8ToString($0));
+      dispatchEvent(event);
+    }, job_id.c_str());
     // clang-format on
   });
 }
