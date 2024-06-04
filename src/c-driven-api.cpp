@@ -44,9 +44,6 @@
 //   }
 // }
 
-// const uintptr_t END_OF_FILE = -2;
-// const uintptr_t ENTRY_ERROR = -1;
-
 // auto get_buffer(uintptr_t buffer_ptr, size_t buffer_size) {
 //   return emscripten::val(emscripten::typed_memory_view<uint8_t>(buffer_size, int_to_ptr<uint8_t*>(buffer_ptr)));
 // }
@@ -74,10 +71,9 @@ std::optional<archive*> open_archive(std::string path) {
   return arch;
 }
 
-// auto close_archive(uintptr_t archive_ptr) {
-//   const auto arch = int_to_ptr<archive*>(archive_ptr);
-//   archive_read_free(arch);
-// }
+void close_archive(archive* arch) {
+  archive_read_free(arch);
+}
 
 std::optional<archive_entry*> get_next_entry(archive* arch) {
   auto return_code = ARCHIVE_OK;
@@ -96,30 +92,38 @@ std::optional<archive_entry*> get_next_entry(archive* arch) {
   return nullptr;
 }
 
-// auto skip_extraction(uintptr_t archive_ptr) {
-//   archive_read_data_skip(int_to_ptr<archive*>(archive_ptr));
-// }
-
-auto get_entry_name(archive_entry* entry) {
+std::string get_entry_name(archive_entry* entry) {
   return std::string(archive_entry_pathname(entry));
 }
 
-// size_t get_entry_size(uintptr_t entry_ptr) {
-//   return archive_entry_size(int_to_ptr<archive_entry*>(entry_ptr));
-// }
+size_t get_entry_size(archive_entry* entry) {
+  return archive_entry_size(entry);
+}
 
-// auto entry_is_file(uintptr_t entry_ptr) {
-//   return archive_entry_filetype(int_to_ptr<archive_entry*>(entry_ptr)) == 32768;
-// }
+bool is_file(archive_entry* entry) {
+  return archive_entry_filetype(entry) == 32768;
+}
 
-// auto read_entry_data(uintptr_t archive_ptr, size_t entry_ptr) {
-//   const auto entry = int_to_ptr<archive_entry*>(entry_ptr);
-//   const size_t size = archive_entry_size(entry);
-//   void* read_buffer = malloc(size);
+std::string to_lower_case(std::string str) {
+  std::stringstream stream;
+  for (const auto ch : str) {
+    stream << tolower(ch);
+  }
 
-//   archive_read_data(int_to_ptr<archive*>(archive_ptr), read_buffer, size);
-//   return ptr_to_int(read_buffer);
-// }
+  return stream.str();
+}
+
+bool is_image(std::string path) {
+  return path.ends_with('.jpg') || path.ends_with('.png');
+}
+
+void* read_entry_data(archive* arch, archive_entry* entry) {
+  size_t size = archive_entry_size(entry);
+  void* read_buffer = malloc(size);
+
+  archive_read_data(arch, read_buffer, size);
+  return read_buffer;
+}
 
 void extract_to_disk(std::string job_id, std::string path) {
   std::thread([=] {
@@ -127,16 +131,24 @@ void extract_to_disk(std::string job_id, std::string path) {
     wasmfs_create_directory("/opfs", 0777, opfs);
 
     auto arch = open_archive(path);
-    if (arch.has_value()) {
-      for (;;) {
-        auto entry = get_next_entry(arch.value());
-        if (entry.has_value()) {
-          auto name = get_entry_name(entry.value());
-          printf("%s\n", name.c_str());
-        }
+    if (!arch) {
+      return;
+    }
 
+    for (;;) {
+      auto entry_optional = get_next_entry(arch.value());
+      if (!entry_optional.has_value()) {
         break;
       }
+
+      auto entry = entry_optional.value();
+      auto entry_path = to_lower_case(get_entry_name(entry));
+
+      printf("%s\n", entry_path.c_str());
+      printf("%d\n", is_file(entry));
+      printf("%lu\n", get_entry_size(entry));
+
+      break;
     }
 
     // clang-format off
