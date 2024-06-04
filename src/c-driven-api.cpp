@@ -114,7 +114,7 @@ std::string to_lower_case(std::string str) {
 }
 
 bool is_image(std::string path) {
-  return path.ends_with('.jpg') || path.ends_with('.png');
+  return path.ends_with(".jpg") || path.ends_with(".png");
 }
 
 void* read_entry_data(archive* arch, archive_entry* entry) {
