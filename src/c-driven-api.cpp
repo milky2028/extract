@@ -125,10 +125,15 @@ void* read_entry_data(archive* arch, archive_entry* entry) {
   return read_buffer;
 }
 
+bool backend_created = false;
+
 void extract_to_disk(std::string job_id, std::string path) {
-  std::thread([=] {
-    auto opfs = wasmfs_create_opfs_backend();
-    wasmfs_create_directory("/opfs", 0777, opfs);
+  std::thread([&] {
+    if (!backend_created) {
+      auto opfs = wasmfs_create_opfs_backend();
+      wasmfs_create_directory("/opfs", 0777, opfs);
+      backend_created = true;
+    }
 
     auto arch = open_archive(path);
     if (!arch) {
