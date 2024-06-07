@@ -162,7 +162,7 @@ void extract_to_disk(std::string job_id, std::string path) {
       dispatchEvent(event);
     }, job_id.c_str());
     // clang-format on
-  });
+  }).detach();
 }
 
 EMSCRIPTEN_BINDINGS(module) {
