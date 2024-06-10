@@ -844,11 +844,11 @@ function dbg(...args) {
 }
 
 var ASM_CONSTS = {
-  286684: ($0, $1, $2, $3) => {
+  286684: ($0, $1, $2) => {
     const event = new CustomEvent(UTF8ToString($0), {
       detail: {
-        type: UTF8ToString($2),
-        data: UTF8ToString($3)
+        type: UTF8ToString($1),
+        data: UTF8ToString($2)
       }
     });
     dispatchEvent(event);

@@ -1,6 +1,6 @@
 {
   "name": "extract-zip-rar",
-  "version": "0.13.0",
+  "version": "0.13.1",
   "description": "Utility using libarchive to extract .zip and .rar archives.",
   "type": "module",
   "main": "./dist/extract.js",

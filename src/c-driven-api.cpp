@@ -18,7 +18,7 @@
 void dispatch_main_thread_event(std::string parent_event, std::string event_type, std::string event_data) {
   // clang-format off
     MAIN_THREAD_EM_ASM({
-      const event = new CustomEvent(UTF8ToString($0), { detail: { type: UTF8ToString($2), data: UTF8ToString($3) } });
+      const event = new CustomEvent(UTF8ToString($0), { detail: { type: UTF8ToString($1), data: UTF8ToString($2) } });
       dispatchEvent(event);
     }, parent_event.c_str(), event_type.c_str(), event_data.c_str());
   // clang-format on
