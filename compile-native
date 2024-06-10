@@ -1,0 +1,8 @@
+g++ \
+-Oz \
+-std=c++20 \
+-I/opt/homebrew/Cellar/libarchive/3.7.4/include \
+-L/opt/homebrew/Cellar/libarchive/3.7.4/lib \
+-larchive \
+./src/c-driven-api.cpp \
+-o ./dist/native-extractor
