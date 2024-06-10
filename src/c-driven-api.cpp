@@ -52,7 +52,7 @@ bool is_image(std::string path) {
 }
 
 const int WEB_BLOCK_SIZE = 65536;
-void extract_to_disk(std::string job_id, std::string archive_source_path, std::string archive_destination_path) {
+void extract(std::string job_id, std::string archive_source_path, std::string archive_destination_path) {
   std::thread([=] {
     auto return_code = ARCHIVE_OK;
     const auto arch = archive_read_new();
@@ -113,6 +113,6 @@ void mount_filesystem(std::string job_id) {
 }
 
 EMSCRIPTEN_BINDINGS(module) {
-  emscripten::function("extract_to_disk", &extract_to_disk);
+  emscripten::function("extract", &extract);
   emscripten::function("mount_filesystem", &mount_filesystem);
 }

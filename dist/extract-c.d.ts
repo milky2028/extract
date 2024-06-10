@@ -17,7 +17,7 @@ interface WasmModule {
 
 type EmbindString = ArrayBuffer|Uint8Array|Uint8ClampedArray|Int8Array|string;
 interface EmbindModule {
-  extract_to_disk(_0: EmbindString, _1: EmbindString, _2: EmbindString): void;
+  extract(_0: EmbindString, _1: EmbindString, _2: EmbindString): void;
   mount_filesystem(_0: EmbindString): void;
 }
 
