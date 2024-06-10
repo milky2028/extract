@@ -52,7 +52,10 @@ bool is_image(std::string path) {
 }
 
 const int WEB_BLOCK_SIZE = 65536;
-void extract(std::string job_id, std::string archive_source_path, std::string archive_destination_path) {
+void extract(std::string job_id,
+             std::string archive_source_path,
+             std::string archive_destination_path,
+             bool extract_data) {
   std::thread([=] {
     auto return_code = ARCHIVE_OK;
     const auto arch = archive_read_new();
@@ -86,19 +89,22 @@ void extract(std::string job_id, std::string archive_source_path, std::string ar
 
       auto entry_path = archive_entry_pathname(entry);
       if (is_file(entry) && !to_lower_case(entry_path).starts_with("__macosx") && is_image(entry_path)) {
-        auto entry_size = archive_entry_size(entry);
-        void* entry_data_buffer = malloc(entry_size);
-
-        archive_read_data(arch, entry_data_buffer, entry_size);
         auto entry_name = get_entry_name(entry_path);
-        auto item_path = archive_destination_path + get_entry_name(entry_path);
         dispatch_main_thread_event(job_id, "entry", entry_name);
 
-        auto handle = fopen(item_path.c_str(), "wb+");
-        fwrite(entry_data_buffer, entry_size, 1, handle);
+        if (extract_data) {
+          auto entry_size = archive_entry_size(entry);
+          void* entry_data_buffer = malloc(entry_size);
 
-        fclose(handle);
-        free(entry_data_buffer);
+          archive_read_data(arch, entry_data_buffer, entry_size);
+          auto item_path = archive_destination_path + get_entry_name(entry_path);
+
+          auto handle = fopen(item_path.c_str(), "wb+");
+          fwrite(entry_data_buffer, entry_size, 1, handle);
+
+          fclose(handle);
+          free(entry_data_buffer);
+        }
       }
     }
   }).detach();
