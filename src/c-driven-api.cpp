@@ -55,7 +55,7 @@ const int WEB_BLOCK_SIZE = 65536;
 bool backend_created = false;
 
 void extract_to_disk(std::string job_id, std::string archive_source_path, std::string archive_destination_path) {
-  std::thread([&] {
+  std::thread([=] {
     if (!backend_created) {
       auto opfs = wasmfs_create_opfs_backend();
       wasmfs_create_directory("/opfs", 0777, opfs);
