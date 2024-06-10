@@ -1,26 +1,37 @@
 #include <archive.h>
 #include <archive_entry.h>
 
-#ifdef __EMSCRIPTEN__
 #include <emscripten.h>
 #include <emscripten/bind.h>
 #include <emscripten/wasmfs.h>
-#endif
 
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <unistd.h>
-#include <filesystem>
 #include <format>
 #include <fstream>
 #include <iostream>
 #include <string>
 #include <thread>
 
-std::string get_page_name(std::string path) {
+void dispatch_main_thread_event(std::string parent_event, std::string event_type, std::string event_data) {
+  // clang-format off
+    MAIN_THREAD_EM_ASM({
+      const event = new CustomEvent(UTF8ToString($0), { detail: { type: UTF8ToString($2), data: UTF8ToString($3) } });
+      dispatchEvent(event);
+    }, parent_event.c_str(), event_type.c_str(), event_data.c_str());
+  // clang-format on
+}
+
+std::string get_entry_name(std::string path) {
   auto path_splitter = "/";
-  path.rfind(path);
+  auto splitter_position = path.rfind(path_splitter);
+  if (splitter_position == std::string::npos) {
+    return path;
+  }
+
+  return path.substr(splitter_position + 1, path.length());
 }
 
 bool is_file(archive_entry* entry) {
@@ -40,25 +51,16 @@ bool is_image(std::string path) {
   return path.ends_with(".jpg") || path.ends_with(".png");
 }
 
-void* read_entry_data(archive* arch, archive_entry* entry) {
-  size_t size = archive_entry_size(entry);
-  void* read_buffer = malloc(size);
-
-  archive_read_data(arch, read_buffer, size);
-  return read_buffer;
-}
-
+const int WEB_BLOCK_SIZE = 65536;
 bool backend_created = false;
 
-void extract_to_disk(std::string job_id, std::string path) {
+void extract_to_disk(std::string job_id, std::string archive_source_path, std::string archive_destination_path) {
   std::thread([&] {
-#ifdef __EMSCRIPTEN__
     if (!backend_created) {
       auto opfs = wasmfs_create_opfs_backend();
       wasmfs_create_directory("/opfs", 0777, opfs);
       backend_created = true;
     }
-#endif
 
     auto return_code = ARCHIVE_OK;
     const auto arch = archive_read_new();
@@ -69,10 +71,10 @@ void extract_to_disk(std::string job_id, std::string path) {
     archive_read_support_format_rar(arch);
     archive_read_support_format_zip(arch);
 
-    return_code = archive_read_open_filename(arch, path.c_str(), 65536);
+    return_code = archive_read_open_filename(arch, archive_source_path.c_str(), WEB_BLOCK_SIZE);
     if (return_code < ARCHIVE_OK) {
-      printf("Error: %s", archive_error_string(arch));
-      return false;
+      dispatch_main_thread_event(job_id, "failure", archive_error_string(arch));
+      return;
     }
 
     void* entry_data_buffer;
@@ -80,54 +82,37 @@ void extract_to_disk(std::string job_id, std::string path) {
     for (;;) {
       return_code = archive_read_next_header(arch, &entry);
       if (return_code < ARCHIVE_OK) {
-        printf("Error: %s", archive_error_string(arch));
         archive_read_free(arch);
-        return false;
+        dispatch_main_thread_event(job_id, "failure", archive_error_string(arch));
+        return;
       }
 
       if (return_code == ARCHIVE_EOF) {
+        free(entry_data_buffer);
+        free(entry);
         archive_read_free(arch);
-        return true;
+
+        dispatch_main_thread_event(job_id, "completion", "");
+        return;
       }
 
-      auto entry_path = to_lower_case(archive_entry_pathname(entry));
-      if (is_file(entry) && !entry_path.starts_with("__macosx") && is_image(entry_path)) {
+      auto entry_path = archive_entry_pathname(entry);
+      if (is_file(entry) && !to_lower_case(entry_path).starts_with("__macosx") && is_image(entry_path)) {
         auto entry_size = archive_entry_size(entry);
         entry_data_buffer = malloc(entry_size);
 
         archive_read_data(arch, entry_data_buffer, entry_size);
+        auto entry_name = get_entry_name(entry_path);
+        auto item_path = archive_destination_path + get_entry_name(entry_path);
+        dispatch_main_thread_event(job_id, "entry", entry_name);
 
-        auto item_path = std::filesystem::current_path() += std::filesystem::path("/output/") += entry_path;
-
-        // auto handle = open(item_path.c_str(), O_RDWR | O_CREAT, 0);
-        // write(handle, entry_data_buffer, entry_size);
+        auto handle = open(item_path.c_str(), O_RDWR | O_CREAT, 0777);
+        write(handle, entry_data_buffer, entry_size);
       }
     }
-
-    free(entry_data_buffer);
-    free(entry);
-
-#ifdef __EMSCRIPTEN__
-    // clang-format off
-    MAIN_THREAD_EM_ASM({
-      const event = new CustomEvent(UTF8ToString($0));
-      dispatchEvent(event);
-    }, job_id.c_str());
-// clang-format on
-#endif
-
-    return true;
-  }).join();
+  }).detach();
 }
 
-#ifdef __EMSCRIPTEN__
 EMSCRIPTEN_BINDINGS(module) {
   emscripten::function("extract_to_disk", &extract_to_disk);
-}
-#endif
-
-int main() {
-  printf("Starting extractor...\n");
-  auto path = "/Users/tgross/Desktop/Batman- The Killing Joke (1988).cbz";
-  extract_to_disk("some-job", path);
 }
