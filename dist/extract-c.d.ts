@@ -13,13 +13,12 @@ declare namespace RuntimeExports {
     let HEAPU64: any;
 }
 interface WasmModule {
-  _free(_0: number): void;
-  _malloc(_0: number): number;
 }
 
 type EmbindString = ArrayBuffer|Uint8Array|Uint8ClampedArray|Int8Array|string;
 interface EmbindModule {
   extract_to_disk(_0: EmbindString, _1: EmbindString, _2: EmbindString): void;
+  mount_filesystem(_0: EmbindString): void;
 }
 
 export type MainModule = WasmModule & typeof RuntimeExports & EmbindModule;
