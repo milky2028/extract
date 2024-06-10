@@ -107,7 +107,7 @@ bool is_file(archive_entry* entry) {
 std::string to_lower_case(std::string str) {
   std::stringstream stream;
   for (const auto ch : str) {
-    stream << tolower(ch);
+    stream << static_cast<char>(tolower(ch));
   }
 
   return stream.str();
