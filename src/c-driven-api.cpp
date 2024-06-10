@@ -51,20 +51,9 @@ bool is_image(std::string path) {
   return path.ends_with(".jpg") || path.ends_with(".png");
 }
 
-bool filesystem_mounted = false;
-void mount_filesystem() {
-  if (!filesystem_mounted) {
-    auto opfs = wasmfs_create_opfs_backend();
-    wasmfs_create_directory("/opfs", 0777, opfs);
-    filesystem_mounted = true;
-  }
-}
-
 const int WEB_BLOCK_SIZE = 65536;
 void extract_to_disk(std::string job_id, std::string archive_source_path, std::string archive_destination_path) {
   std::thread([=] {
-    mount_filesystem();
-
     auto return_code = ARCHIVE_OK;
     const auto arch = archive_read_new();
 
@@ -80,7 +69,6 @@ void extract_to_disk(std::string job_id, std::string archive_source_path, std::s
       return;
     }
 
-    void* entry_data_buffer;
     archive_entry* entry;
     for (;;) {
       return_code = archive_read_next_header(arch, &entry);
@@ -91,10 +79,7 @@ void extract_to_disk(std::string job_id, std::string archive_source_path, std::s
       }
 
       if (return_code == ARCHIVE_EOF) {
-        free(entry_data_buffer);
-        free(entry);
         archive_read_free(arch);
-
         dispatch_main_thread_event(job_id, "completion", "");
         return;
       }
@@ -102,24 +87,32 @@ void extract_to_disk(std::string job_id, std::string archive_source_path, std::s
       auto entry_path = archive_entry_pathname(entry);
       if (is_file(entry) && !to_lower_case(entry_path).starts_with("__macosx") && is_image(entry_path)) {
         auto entry_size = archive_entry_size(entry);
-        entry_data_buffer = malloc(entry_size);
+        void* entry_data_buffer = malloc(entry_size);
 
         archive_read_data(arch, entry_data_buffer, entry_size);
         auto entry_name = get_entry_name(entry_path);
         auto item_path = archive_destination_path + get_entry_name(entry_path);
         dispatch_main_thread_event(job_id, "entry", entry_name);
 
-        auto handle = open(item_path.c_str(), O_RDWR | O_CREAT, 0777);
-        write(handle, entry_data_buffer, entry_size);
+        auto handle = fopen(item_path.c_str(), "wb+");
+        fwrite(entry_data_buffer, entry_size, 1, handle);
+
+        fclose(handle);
+        free(entry_data_buffer);
       }
     }
   }).detach();
 }
 
-void extract_entry_names(std::string job_id, std::string archive_source_path) {
-  std::thread([=] { mount_filesystem(); }).detach();
+void mount_filesystem(std::string job_id) {
+  std::thread([=] {
+    auto opfs = wasmfs_create_opfs_backend();
+    wasmfs_create_directory("/opfs", 0777, opfs);
+    dispatch_main_thread_event(job_id, "completion", "");
+  }).detach();
 }
 
 EMSCRIPTEN_BINDINGS(module) {
   emscripten::function("extract_to_disk", &extract_to_disk);
+  emscripten::function("mount_filesystem", &mount_filesystem);
 }
