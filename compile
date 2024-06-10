@@ -19,9 +19,6 @@ emcc \
 EMCC_DEBUG=1 &&
 emcc \
 --memoryprofiler \
--sASSERTIONS \
--sSAFE_HEAP \
--sSTACK_OVERFLOW_CHECK=1 \
 -sEXPORT_ES6 \
 -sEXPORTED_FUNCTIONS=_malloc,_free \
 -sALLOW_MEMORY_GROWTH \
@@ -42,9 +39,6 @@ emcc \
 -o ./dist/extract.debug.js &&
 EMCC_DEBUG=1 &&
 emcc \
--sASSERTIONS \
--sSAFE_HEAP \
--sSTACK_OVERFLOW_CHECK=1 \
 -sEXPORT_ES6 \
 -sEXPORTED_FUNCTIONS=_malloc,_free \
 -sALLOW_MEMORY_GROWTH \
@@ -82,9 +76,6 @@ emcc \
 -o ./dist/extract.node.js &&
 EMCC_DEBUG=1 && emcc \
 --memoryprofiler \
--sASSERTIONS \
--sSAFE_HEAP \
--sSTACK_OVERFLOW_CHECK=1 \
 -sEXPORT_ES6 \
 -sWASMFS \
 -sALLOW_TABLE_GROWTH \
