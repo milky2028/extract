@@ -51,16 +51,19 @@ bool is_image(std::string path) {
   return path.ends_with(".jpg") || path.ends_with(".png");
 }
 
-const int WEB_BLOCK_SIZE = 65536;
-bool backend_created = false;
+bool filesystem_mounted = false;
+void mount_filesystem() {
+  if (!filesystem_mounted) {
+    auto opfs = wasmfs_create_opfs_backend();
+    wasmfs_create_directory("/opfs", 0777, opfs);
+    filesystem_mounted = true;
+  }
+}
 
+const int WEB_BLOCK_SIZE = 65536;
 void extract_to_disk(std::string job_id, std::string archive_source_path, std::string archive_destination_path) {
   std::thread([=] {
-    if (!backend_created) {
-      auto opfs = wasmfs_create_opfs_backend();
-      wasmfs_create_directory("/opfs", 0777, opfs);
-      backend_created = true;
-    }
+    mount_filesystem();
 
     auto return_code = ARCHIVE_OK;
     const auto arch = archive_read_new();
@@ -111,6 +114,10 @@ void extract_to_disk(std::string job_id, std::string archive_source_path, std::s
       }
     }
   }).detach();
+}
+
+void extract_entry_names(std::string job_id, std::string archive_source_path) {
+  std::thread([=] { mount_filesystem(); }).detach();
 }
 
 EMSCRIPTEN_BINDINGS(module) {
