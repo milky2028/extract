@@ -90,8 +90,6 @@ void extract(std::string job_id,
       auto entry_path = archive_entry_pathname(entry);
       if (is_file(entry) && !to_lower_case(entry_path).starts_with("__macosx") && is_image(entry_path)) {
         auto entry_name = get_entry_name(entry_path);
-        dispatch_main_thread_event(job_id, "entry", entry_name);
-
         if (extract_data) {
           auto entry_size = archive_entry_size(entry);
           void* entry_data_buffer = malloc(entry_size);
@@ -105,6 +103,8 @@ void extract(std::string job_id,
           fclose(handle);
           free(entry_data_buffer);
         }
+
+        dispatch_main_thread_event(job_id, "entry", entry_name);
       }
     }
   }).detach();
