@@ -15,12 +15,12 @@
 #include <string>
 #include <thread>
 
-void dispatch_main_thread_event(std::string parent_event, std::string event_type, std::string event_data) {
+void dispatch_main_thread_event(std::string parent_event, std::string event_type, std::string event_data, size_t size) {
   // clang-format off
     MAIN_THREAD_EM_ASM({
-      const event = new CustomEvent(UTF8ToString($0), { detail: { type: UTF8ToString($1), data: UTF8ToString($2) } });
+      const event = new CustomEvent(UTF8ToString($0), { detail: { type: UTF8ToString($1), name: UTF8ToString($2), size: $3 } });
       dispatchEvent(event);
-    }, parent_event.c_str(), event_type.c_str(), event_data.c_str());
+    }, parent_event.c_str(), event_type.c_str(), event_data.c_str(), size);
   // clang-format on
 }
 
@@ -68,7 +68,7 @@ void extract(std::string job_id,
 
     return_code = archive_read_open_filename(arch, archive_source_path.c_str(), WEB_BLOCK_SIZE);
     if (return_code < ARCHIVE_OK) {
-      dispatch_main_thread_event(job_id, "failure", archive_error_string(arch));
+      dispatch_main_thread_event(job_id, "failure", archive_error_string(arch), 0);
       return;
     }
 
@@ -77,13 +77,13 @@ void extract(std::string job_id,
       return_code = archive_read_next_header(arch, &entry);
       if (return_code < ARCHIVE_OK) {
         archive_read_free(arch);
-        dispatch_main_thread_event(job_id, "failure", archive_error_string(arch));
+        dispatch_main_thread_event(job_id, "failure", archive_error_string(arch), 0);
         return;
       }
 
       if (return_code == ARCHIVE_EOF) {
         archive_read_free(arch);
-        dispatch_main_thread_event(job_id, "completion", "");
+        dispatch_main_thread_event(job_id, "completion", "", 0);
         return;
       }
 
@@ -102,9 +102,10 @@ void extract(std::string job_id,
 
           fclose(handle);
           free(entry_data_buffer);
+          dispatch_main_thread_event(job_id, "entry", entry_name, entry_size);
+        } else {
+          dispatch_main_thread_event(job_id, "entry", entry_name, 0);
         }
-
-        dispatch_main_thread_event(job_id, "entry", entry_name);
       }
     }
   }).detach();
@@ -114,7 +115,7 @@ void mount_filesystem(std::string job_id) {
   std::thread([=] {
     auto opfs = wasmfs_create_opfs_backend();
     wasmfs_create_directory("/opfs", 0777, opfs);
-    dispatch_main_thread_event(job_id, "completion", "");
+    dispatch_main_thread_event(job_id, "completion", "", 0);
   }).detach();
 }
 
