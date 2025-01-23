@@ -17,6 +17,10 @@
 #include <string>
 #include <thread>
 
+EMSCRIPTEN_DECLARE_VAL_TYPE(OnCompletion);
+EMSCRIPTEN_DECLARE_VAL_TYPE(OnFailure);
+EMSCRIPTEN_DECLARE_VAL_TYPE(OnEntry);
+
 template <class F>
 void run_async(F&& f) {
   using function_type = typename std::remove_reference<F>::type;
@@ -64,9 +68,9 @@ const int WEB_BLOCK_SIZE = 65536;
 void extract(std::string archive_source_path,
              std::string archive_destination_path,
              bool extract_data,
-             emscripten::val on_completion,
-             emscripten::val on_failure,
-             emscripten::val on_entry) {
+             OnCompletion on_completion,
+             OnFailure on_failure,
+             OnEntry on_entry) {
   std::thread([archive_source_path, archive_destination_path, extract_data, on_completion, on_failure, on_entry] {
     auto return_code = ARCHIVE_OK;
     const auto arch = archive_read_new();
@@ -127,6 +131,10 @@ void mount_filesystem(emscripten::val on_complete) {
 }
 
 EMSCRIPTEN_BINDINGS(module) {
+  emscripten::register_type<OnCompletion>("() => void");
+  emscripten::register_type<OnFailure>("(errorMessage: string) => void");
+  emscripten::register_type<OnEntry>("(buffer: any, name: string, size: number) => void");
+
   emscripten::function("extract", &extract);
   emscripten::function("mount_filesystem", &mount_filesystem);
 }

@@ -3346,6 +3346,10 @@ var __embind_register_std_wstring = (rawType, charSize, name) => {
   });
 };
 
+var __embind_register_user_type = (rawType, name) => {
+  __embind_register_emval(rawType);
+};
+
 var __embind_register_void = (rawType, name) => {
   name = readLatin1String(name);
   registerType(rawType, {
@@ -4883,6 +4887,7 @@ function assignWasmImports() {
     /** @export */ _embind_register_memory_view: __embind_register_memory_view,
     /** @export */ _embind_register_std_string: __embind_register_std_string,
     /** @export */ _embind_register_std_wstring: __embind_register_std_wstring,
+    /** @export */ _embind_register_user_type: __embind_register_user_type,
     /** @export */ _embind_register_void: __embind_register_void,
     /** @export */ _emscripten_init_main_thread_js: __emscripten_init_main_thread_js,
     /** @export */ _emscripten_notify_mailbox_postmessage: __emscripten_notify_mailbox_postmessage,
@@ -5012,7 +5017,7 @@ var __wasmfs_opfs_record_entry = createExportWrapper("_wasmfs_opfs_record_entry"
 
 var _wasmfs_flush = createExportWrapper("wasmfs_flush", 0);
 
-var ___heap_base = Module["___heap_base"] = 292032;
+var ___heap_base = Module["___heap_base"] = 292192;
 
 // include: postamble.js
 // === Auto-generated postamble setup entry stuff ===
