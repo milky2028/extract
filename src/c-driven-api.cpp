@@ -3,6 +3,8 @@
 
 #include <emscripten.h>
 #include <emscripten/bind.h>
+#include <emscripten/threading.h>
+#include <emscripten/threading_legacy.h>
 #include <emscripten/wasmfs.h>
 
 #include <errno.h>
@@ -15,13 +17,20 @@
 #include <string>
 #include <thread>
 
-void dispatch_main_thread_event(std::string parent_event, std::string event_type, std::string event_data, size_t size) {
-  // clang-format off
-    MAIN_THREAD_EM_ASM({
-      const event = new CustomEvent(UTF8ToString($0), { detail: { type: UTF8ToString($1), name: UTF8ToString($2), size: $3 } });
-      dispatchEvent(event);
-    }, parent_event.c_str(), event_type.c_str(), event_data.c_str(), size);
-  // clang-format on
+template <class F>
+void run_async(F&& f) {
+  using function_type = typename std::remove_reference<F>::type;
+  auto p = new function_type(std::forward<F>(f));
+  emscripten_async_run_in_main_runtime_thread(EM_FUNC_SIG_VI, static_cast<void (*)(void*)>([](void* f_) {
+                                                emscripten_async_call(
+                                                    [](void* f_) {
+                                                      auto f = static_cast<function_type*>(f_);
+                                                      (*f)();
+                                                      delete f;
+                                                    },
+                                                    f_, 0);
+                                              }),
+                                              p);
 }
 
 std::string get_entry_name(std::string path) {
@@ -52,11 +61,13 @@ bool is_image(std::string path) {
 }
 
 const int WEB_BLOCK_SIZE = 65536;
-void extract(std::string job_id,
-             std::string archive_source_path,
+void extract(std::string archive_source_path,
              std::string archive_destination_path,
-             bool extract_data) {
-  std::thread([=] {
+             bool extract_data,
+             emscripten::val on_completion,
+             emscripten::val on_failure,
+             emscripten::val on_entry) {
+  std::thread([archive_source_path, archive_destination_path, extract_data, on_completion, on_failure, on_entry] {
     auto return_code = ARCHIVE_OK;
     const auto arch = archive_read_new();
 
@@ -68,7 +79,7 @@ void extract(std::string job_id,
 
     return_code = archive_read_open_filename(arch, archive_source_path.c_str(), WEB_BLOCK_SIZE);
     if (return_code < ARCHIVE_OK) {
-      dispatch_main_thread_event(job_id, "failure", archive_error_string(arch), 0);
+      run_async([on_failure, &arch] { on_failure(std::string(archive_error_string(arch))); });
       return;
     }
 
@@ -77,13 +88,13 @@ void extract(std::string job_id,
       return_code = archive_read_next_header(arch, &entry);
       if (return_code < ARCHIVE_OK) {
         archive_read_free(arch);
-        dispatch_main_thread_event(job_id, "failure", archive_error_string(arch), 0);
+        run_async([on_failure, &arch] { on_failure(std::string(archive_error_string(arch))); });
         return;
       }
 
       if (return_code == ARCHIVE_EOF) {
         archive_read_free(arch);
-        dispatch_main_thread_event(job_id, "completion", "", 0);
+        run_async(on_completion);
         return;
       }
 
@@ -93,29 +104,25 @@ void extract(std::string job_id,
         if (extract_data) {
           auto entry_size = archive_entry_size(entry);
           void* entry_data_buffer = malloc(entry_size);
-
           archive_read_data(arch, entry_data_buffer, entry_size);
-          auto item_path = archive_destination_path + get_entry_name(entry_path);
 
-          auto handle = fopen(item_path.c_str(), "wb+");
-          fwrite(entry_data_buffer, entry_size, 1, handle);
-
-          fclose(handle);
-          free(entry_data_buffer);
-          dispatch_main_thread_event(job_id, "entry", entry_name, entry_size);
+          run_async([on_entry, entry_name, entry_size, &entry_data_buffer] {
+            on_entry(entry_data_buffer, entry_name, entry_size);
+          });
         } else {
-          dispatch_main_thread_event(job_id, "entry", entry_name, 0);
+          run_async([on_entry, entry_name] { on_entry(entry_name); });
         }
       }
     }
   }).detach();
 }
 
-void mount_filesystem(std::string job_id) {
-  std::thread([=] {
+void mount_filesystem(emscripten::val on_complete) {
+  std::thread([on_complete] {
     auto opfs = wasmfs_create_opfs_backend();
     wasmfs_create_directory("/opfs", 0777, opfs);
-    dispatch_main_thread_event(job_id, "completion", "", 0);
+
+    run_async(on_complete);
   }).detach();
 }
 
