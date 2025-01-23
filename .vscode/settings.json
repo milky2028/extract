@@ -65,6 +65,9 @@
     "algorithm": "cpp",
     "execution": "cpp",
     "fstream": "cpp",
-    "format": "cpp"
+    "format": "cpp",
+    "memory": "cpp",
+    "forward_list": "cpp",
+    "print": "cpp"
   }
 }
