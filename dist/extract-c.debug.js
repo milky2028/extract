@@ -2406,6 +2406,7 @@ var Module = (() => {
         // the first case in their bundling step. The latter ends up producing an invalid
         // URL to import from the server (e.g., for webpack the file:// path).
         worker = new Worker(new URL("extract-c.debug.js", import.meta.url), {
+          /* @vite-ignore */
           type: "module",
           // This is the way that we signal to the Web Worker that it is hosting
           // a pthread.
