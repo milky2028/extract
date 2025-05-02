@@ -4897,7 +4897,7 @@ var __wasmfs_opfs_record_entry = createExportWrapper("_wasmfs_opfs_record_entry"
 
 var _wasmfs_flush = createExportWrapper("wasmfs_flush", 0);
 
-var ___heap_base = Module["___heap_base"] = 303920;
+var ___heap_base = Module["___heap_base"] = 303664;
 
 // include: postamble.js
 // === Auto-generated postamble setup entry stuff ===

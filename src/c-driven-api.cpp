@@ -106,11 +106,11 @@ void extract(std::string archive_source_path,
         auto entry_name = get_entry_name(entry_path);
         if (extract_data) {
           auto entry_size = archive_entry_size(entry);
-          void* entry_data_buffer = malloc(entry_size);
+          auto entry_data_buffer = static_cast<uint8_t*>(malloc(entry_size));
           archive_read_data(arch, entry_data_buffer, entry_size);
 
           run_async([on_entry, entry_name, entry_size, &entry_data_buffer] {
-            on_entry(entry_data_buffer, entry_name, entry_size);
+            on_entry(entry_name, emscripten::typed_memory_view<uint8_t>(entry_size, entry_data_buffer));
           });
         } else {
           run_async([on_entry, entry_name] { on_entry(entry_name); });
@@ -132,7 +132,7 @@ void mount_filesystem(emscripten::val on_complete) {
 EMSCRIPTEN_BINDINGS(module) {
   emscripten::register_type<OnCompletion>("() => void");
   emscripten::register_type<OnFailure>("(errorMessage: string) => void");
-  emscripten::register_type<OnEntry>("(buffer: any, name: string, size: number) => void");
+  emscripten::register_type<OnEntry>("(name: string, buffer?: Uint8Array) => void");
 
   emscripten::function("extract", &extract);
   emscripten::function("mount_filesystem", &mount_filesystem);
