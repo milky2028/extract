@@ -17,7 +17,7 @@
 #include <string>
 #include <thread>
 
-EMSCRIPTEN_DECLARE_VAL_TYPE(OnCompletion);
+EMSCRIPTEN_DECLARE_VAL_TYPE(VoidFunction);
 EMSCRIPTEN_DECLARE_VAL_TYPE(OnFailure);
 EMSCRIPTEN_DECLARE_VAL_TYPE(OnEntry);
 
@@ -67,7 +67,7 @@ bool is_image(std::string path) {
 const int WEB_BLOCK_SIZE = 65536;
 void extract(std::string archive_source_path,
              bool extract_data,
-             OnCompletion on_completion,
+             VoidFunction on_completion,
              OnFailure on_failure,
              OnEntry on_entry) {
   std::thread([archive_source_path, extract_data, on_completion, on_failure, on_entry] {
@@ -120,7 +120,7 @@ void extract(std::string archive_source_path,
   }).detach();
 }
 
-void mount_filesystem(emscripten::val on_complete) {
+void mount_filesystem(VoidFunction on_complete) {
   std::thread([on_complete] {
     auto opfs = wasmfs_create_opfs_backend();
     wasmfs_create_directory("/opfs", 0777, opfs);
@@ -130,7 +130,7 @@ void mount_filesystem(emscripten::val on_complete) {
 }
 
 EMSCRIPTEN_BINDINGS(module) {
-  emscripten::register_type<OnCompletion>("() => void");
+  emscripten::register_type<VoidFunction>("VoidFunction");
   emscripten::register_type<OnFailure>("(errorMessage: string) => void");
   emscripten::register_type<OnEntry>("(name: string, buffer?: Uint8Array) => void");
 
