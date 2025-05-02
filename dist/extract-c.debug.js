@@ -3434,12 +3434,6 @@ var __emval_run_destructors = handle => {
   __emval_decref(handle);
 };
 
-var __emval_take_value = (type, arg) => {
-  type = requireRegisteredType(type, "_emval_take_value");
-  var v = type["readValueFromPointer"](arg);
-  return Emval.toHandle(v);
-};
-
 var isLeapYear = year => year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
 
 var MONTH_DAYS_LEAP_CUMULATIVE = [ 0, 31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335 ];
@@ -4781,7 +4775,6 @@ function assignWasmImports() {
     /** @export */ _emval_get_method_caller: __emval_get_method_caller,
     /** @export */ _emval_incref: __emval_incref,
     /** @export */ _emval_run_destructors: __emval_run_destructors,
-    /** @export */ _emval_take_value: __emval_take_value,
     /** @export */ _localtime_js: __localtime_js,
     /** @export */ _mktime_js: __mktime_js,
     /** @export */ _tzset_js: __tzset_js,
