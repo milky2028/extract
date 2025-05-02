@@ -1,8 +1,6 @@
 emcc \
 -sEXPORT_ES6 \
--sEXPORTED_FUNCTIONS=_malloc,_free \
 -sALLOW_MEMORY_GROWTH \
--sALLOW_TABLE_GROWTH \
 -sENVIRONMENT=web,worker \
 -sUSE_ZLIB=1 \
 -sUSE_BZIP2=1 \
@@ -20,9 +18,7 @@ EMCC_DEBUG=1 &&
 emcc \
 --memoryprofiler \
 -sEXPORT_ES6 \
--sEXPORTED_FUNCTIONS=_malloc,_free \
 -sALLOW_MEMORY_GROWTH \
--sALLOW_TABLE_GROWTH \
 -sENVIRONMENT=web,worker \
 -sUSE_ZLIB=1 \
 -sUSE_BZIP2=1 \
@@ -40,9 +36,7 @@ emcc \
 EMCC_DEBUG=1 &&
 emcc \
 -sEXPORT_ES6 \
--sEXPORTED_FUNCTIONS=_malloc,_free \
 -sALLOW_MEMORY_GROWTH \
--sALLOW_TABLE_GROWTH \
 -sENVIRONMENT=node \
 -sUSE_ZLIB=1 \
 -sUSE_BZIP2=1 \
@@ -59,9 +53,7 @@ emcc \
 -o ./dist/extract.node.debug.js &&
 emcc \
 -sEXPORT_ES6 \
--sEXPORTED_FUNCTIONS=_malloc,_free \
 -sALLOW_MEMORY_GROWTH \
--sALLOW_TABLE_GROWTH \
 -sENVIRONMENT=node \
 -sUSE_ZLIB=1 \
 -sUSE_BZIP2=1 \
@@ -78,7 +70,6 @@ EMCC_DEBUG=1 && emcc \
 --memoryprofiler \
 -sEXPORT_ES6 \
 -sWASMFS \
--sALLOW_TABLE_GROWTH \
 -sALLOW_MEMORY_GROWTH \
 -pthread \
 -sPTHREAD_POOL_SIZE=navigator.hardwareConcurrency \
@@ -100,7 +91,6 @@ EMCC_DEBUG=1 && emcc \
 emcc \
 -sEXPORT_ES6 \
 -sWASMFS \
--sALLOW_TABLE_GROWTH \
 -sALLOW_MEMORY_GROWTH \
 -pthread \
 -sPTHREAD_POOL_SIZE=navigator.hardwareConcurrency \

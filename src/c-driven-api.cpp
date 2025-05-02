@@ -66,12 +66,11 @@ bool is_image(std::string path) {
 
 const int WEB_BLOCK_SIZE = 65536;
 void extract(std::string archive_source_path,
-             std::string archive_destination_path,
              bool extract_data,
              OnCompletion on_completion,
              OnFailure on_failure,
              OnEntry on_entry) {
-  std::thread([archive_source_path, archive_destination_path, extract_data, on_completion, on_failure, on_entry] {
+  std::thread([archive_source_path, extract_data, on_completion, on_failure, on_entry] {
     auto return_code = ARCHIVE_OK;
     const auto arch = archive_read_new();
 

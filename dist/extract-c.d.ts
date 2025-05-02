@@ -4,7 +4,7 @@ interface WasmModule {
 
 type EmbindString = ArrayBuffer|Uint8Array|Uint8ClampedArray|Int8Array|string;
 interface EmbindModule {
-  extract(_0: EmbindString, _1: EmbindString, _2: boolean, _3: () => void, _4: (errorMessage: string) => void, _5: (buffer: any, name: string, size: number) => void): void;
+  extract(_0: EmbindString, _1: boolean, _2: () => void, _3: (errorMessage: string) => void, _4: (buffer: any, name: string, size: number) => void): void;
   mount_filesystem(_0: any): void;
 }
 

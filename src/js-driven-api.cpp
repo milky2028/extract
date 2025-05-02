@@ -26,7 +26,8 @@ auto free_buffer(uintptr_t buffer_ptr) {
   free(int_to_ptr<void*>(buffer_ptr));
 }
 
-auto open_archive(uintptr_t archive_file_ptr, size_t archive_file_size) {
+const int WEB_BLOCK_SIZE = 65536;
+auto open_archive(std::string archive_path) {
   auto return_code = ARCHIVE_OK;
   const auto arch = archive_read_new();
 
@@ -36,7 +37,7 @@ auto open_archive(uintptr_t archive_file_ptr, size_t archive_file_size) {
   archive_read_support_format_rar(arch);
   archive_read_support_format_zip(arch);
 
-  return_code = archive_read_open_memory(arch, int_to_ptr<void*>(archive_file_ptr), archive_file_size);
+  return_code = archive_read_open_filename(arch, archive_path.c_str(), WEB_BLOCK_SIZE);
   if (return_code < ARCHIVE_OK) {
     return ENTRY_ERROR;
   }
