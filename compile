@@ -71,8 +71,6 @@ EMCC_DEBUG=1 && emcc \
 -sEXPORT_ES6 \
 -sWASMFS \
 -sALLOW_MEMORY_GROWTH \
--pthread \
--sPTHREAD_POOL_SIZE=navigator.hardwareConcurrency \
 -sENVIRONMENT=web,worker \
 -sUSE_ZLIB=1 \
 -sUSE_BZIP2=1 \
@@ -92,8 +90,6 @@ emcc \
 -sEXPORT_ES6 \
 -sWASMFS \
 -sALLOW_MEMORY_GROWTH \
--pthread \
--sPTHREAD_POOL_SIZE=navigator.hardwareConcurrency \
 -sENVIRONMENT=web,worker \
 -sUSE_ZLIB=1 \
 -sUSE_BZIP2=1 \
