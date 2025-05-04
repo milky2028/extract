@@ -17,6 +17,7 @@ emcc \
 EMCC_DEBUG=1 &&
 emcc \
 --memoryprofiler \
+-fsanitize=address \
 -sEXPORT_ES6 \
 -sALLOW_MEMORY_GROWTH \
 -sENVIRONMENT=web,worker \
@@ -68,6 +69,7 @@ emcc \
 -o ./dist/extract.node.js &&
 EMCC_DEBUG=1 && emcc \
 --memoryprofiler \
+-fsanitize=address \
 -sEXPORT_ES6 \
 -sWASMFS \
 -sALLOW_MEMORY_GROWTH \
