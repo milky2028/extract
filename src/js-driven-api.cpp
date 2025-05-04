@@ -27,8 +27,7 @@ auto free_buffer(intptr_t buffer_ptr) {
   free(int_to_ptr<void*>(buffer_ptr));
 }
 
-const int WEB_BLOCK_SIZE = 65536;
-auto open_archive(std::string archive_path) {
+auto open_archive(uintptr_t archive_file_ptr, size_t archive_file_size) {
   auto return_code = ARCHIVE_OK;
   const auto arch = archive_read_new();
 
@@ -38,7 +37,7 @@ auto open_archive(std::string archive_path) {
   archive_read_support_format_rar(arch);
   archive_read_support_format_zip(arch);
 
-  return_code = archive_read_open_filename(arch, archive_path.c_str(), WEB_BLOCK_SIZE);
+  return_code = archive_read_open_memory(arch, int_to_ptr<void*>(archive_file_ptr), archive_file_size);
   if (return_code < ARCHIVE_OK) {
     return ENTRY_ERROR;
   }
@@ -111,7 +110,7 @@ EMSCRIPTEN_BINDINGS(module) {
   emscripten::function("entry_is_file", &entry_is_file, emscripten::allow_raw_pointers());
 
 #if DEBUG
-  emscripten::function("do_leak_check", __lsan_do_leak_check);
-  emscripten::function("do_recoverable_leak_check", __lsan_do_recoverable_leak_check);
+  emscripten::function("do_leak_check", &__lsan_do_leak_check);
+  emscripten::function("do_recoverable_leak_check", &__lsan_do_recoverable_leak_check);
 #endif 
 }

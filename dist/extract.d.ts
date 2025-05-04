@@ -2,13 +2,12 @@
 interface WasmModule {
 }
 
-type EmbindString = ArrayBuffer|Uint8Array|Uint8ClampedArray|Int8Array|string;
 interface EmbindModule {
   get_buffer(_0: number, _1: number): any;
   free_buffer(_0: number): void;
   END_OF_FILE: number;
   ENTRY_ERROR: number;
-  open_archive(_0: EmbindString): number;
+  open_archive(_0: number, _1: number): number;
   close_archive(_0: number): void;
   skip_extraction(_0: number): void;
   get_next_entry(_0: number): number;
