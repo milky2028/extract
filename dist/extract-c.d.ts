@@ -3,9 +3,17 @@ interface WasmModule {
 }
 
 type EmbindString = ArrayBuffer|Uint8Array|Uint8ClampedArray|Int8Array|string;
+export type ExtractParams = {
+  archive_source_path: EmbindString,
+  extract_data: boolean,
+  on_completion: VoidFunction,
+  on_failure: (errorMessage: string) => void,
+  on_entry: (name: string, buffer?: Uint8Array) => void
+};
+
 interface EmbindModule {
-  extract(_0: EmbindString, _1: boolean, _2: VoidFunction, _3: (errorMessage: string) => void, _4: (name: string, buffer?: Uint8Array) => void): void;
-  mount_filesystem(_0: VoidFunction): void;
+  extract(_0: ExtractParams): void;
+  mount_filesystem(): boolean;
 }
 
 export type MainModule = WasmModule & EmbindModule;
