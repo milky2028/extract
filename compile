@@ -1,5 +1,6 @@
 emcc \
 -sEXPORT_ES6 \
+-sEXPORTED_FUNCTIONS=_malloc,_free \
 -sALLOW_MEMORY_GROWTH \
 -sENVIRONMENT=web,worker \
 -sUSE_ZLIB=1 \
@@ -20,6 +21,7 @@ emcc \
 -DDEBUG \
 -fsanitize=address \
 -sEXPORT_ES6 \
+-sEXPORTED_FUNCTIONS=_malloc,_free \
 -sALLOW_MEMORY_GROWTH \
 -sENVIRONMENT=web,worker \
 -sUSE_ZLIB=1 \
@@ -38,6 +40,7 @@ emcc \
 EMCC_DEBUG=1 &&
 emcc \
 -sEXPORT_ES6 \
+-sEXPORTED_FUNCTIONS=_malloc,_free \
 -sALLOW_MEMORY_GROWTH \
 -sENVIRONMENT=node \
 -sUSE_ZLIB=1 \
@@ -55,6 +58,7 @@ emcc \
 -o ./dist/extract.node.debug.js &&
 emcc \
 -sEXPORT_ES6 \
+-sEXPORTED_FUNCTIONS=_malloc,_free \
 -sALLOW_MEMORY_GROWTH \
 -sENVIRONMENT=node \
 -sUSE_ZLIB=1 \
