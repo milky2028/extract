@@ -4235,7 +4235,7 @@ var __emscripten_stack_alloc = wasmExports['_emscripten_stack_alloc']
 var _emscripten_stack_get_current = wasmExports['emscripten_stack_get_current']
 var __wasmfs_opfs_record_entry = createExportWrapper('_wasmfs_opfs_record_entry', 3);
 var _wasmfs_flush = createExportWrapper('wasmfs_flush', 0);
-var ___heap_base = Module['___heap_base'] = 284928;
+var ___heap_base = Module['___heap_base'] = 284944;
 
 // include: postamble.js
 // === Auto-generated postamble setup entry stuff ===

@@ -6388,7 +6388,7 @@ var _emscripten_stack_get_end = wasmExports['emscripten_stack_get_end']
 var __emscripten_stack_restore = wasmExports['_emscripten_stack_restore']
 var __emscripten_stack_alloc = wasmExports['_emscripten_stack_alloc']
 var _emscripten_stack_get_current = wasmExports['emscripten_stack_get_current']
-var ___heap_base = Module['___heap_base'] = 263808;
+var ___heap_base = Module['___heap_base'] = 263824;
 
 // include: postamble.js
 // === Auto-generated postamble setup entry stuff ===
