@@ -19,7 +19,6 @@ EMCC_DEBUG=1 &&
 emcc \
 --memoryprofiler \
 -DDEBUG \
--fsanitize=address \
 -sEXPORT_ES6 \
 -sEXPORTED_FUNCTIONS=_malloc,_free \
 -sALLOW_MEMORY_GROWTH \
@@ -75,7 +74,6 @@ emcc \
 EMCC_DEBUG=1 && emcc \
 --memoryprofiler \
 -DDEBUG \
--fsanitize=address \
 -sEXPORT_ES6 \
 -sWASMFS \
 -sALLOW_MEMORY_GROWTH \

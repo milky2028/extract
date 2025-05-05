@@ -108,9 +108,4 @@ EMSCRIPTEN_BINDINGS(module) {
   emscripten::function("get_entry_name", &get_entry_name, emscripten::allow_raw_pointers());
   emscripten::function("read_entry_data", &read_entry_data, emscripten::allow_raw_pointers());
   emscripten::function("entry_is_file", &entry_is_file, emscripten::allow_raw_pointers());
-
-#if DEBUG
-  emscripten::function("do_leak_check", &__lsan_do_leak_check);
-  emscripten::function("do_recoverable_leak_check", &__lsan_do_recoverable_leak_check);
-#endif 
 }
