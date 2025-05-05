@@ -2,7 +2,7 @@ emcc \
 -sEXPORT_ES6 \
 -sEXPORTED_FUNCTIONS=_malloc,_free \
 -sALLOW_MEMORY_GROWTH \
--sENVIRONMENT=web,worker \
+-sENVIRONMENT=worker \
 -sUSE_ZLIB=1 \
 -sUSE_BZIP2=1 \
 -Oz \
@@ -22,7 +22,7 @@ emcc \
 -sEXPORT_ES6 \
 -sEXPORTED_FUNCTIONS=_malloc,_free \
 -sALLOW_MEMORY_GROWTH \
--sENVIRONMENT=web,worker \
+-sENVIRONMENT=worker \
 -sUSE_ZLIB=1 \
 -sUSE_BZIP2=1 \
 -g \
@@ -77,7 +77,7 @@ EMCC_DEBUG=1 && emcc \
 -sEXPORT_ES6 \
 -sWASMFS \
 -sALLOW_MEMORY_GROWTH \
--sENVIRONMENT=web,worker \
+-sENVIRONMENT=worker \
 -sUSE_ZLIB=1 \
 -sUSE_BZIP2=1 \
 -O0 \
@@ -96,7 +96,7 @@ emcc \
 -sEXPORT_ES6 \
 -sWASMFS \
 -sALLOW_MEMORY_GROWTH \
--sENVIRONMENT=web,worker \
+-sENVIRONMENT=worker \
 -sUSE_ZLIB=1 \
 -sUSE_BZIP2=1 \
 -Oz \
