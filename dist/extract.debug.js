@@ -1,4 +1,5 @@
 var Module = (() => {
+  var _scriptName = import.meta.url;
   
   return (
 async function(moduleArg = {}) {
@@ -45,6 +46,9 @@ var ENVIRONMENT_IS_SHELL = !ENVIRONMENT_IS_WEB && !ENVIRONMENT_IS_NODE && !ENVIR
 // refer to Module (if they choose; they can also define Module)
 // include: ./src/locateFile.js
 Module.locateFile = url => {
+  if (url.includes(".wasm.map")) {
+    globalThis.wasmSourceMapURL ?? url;
+  }
   if (url.includes("worker")) {
     return globalThis.workerURL ?? url;
   }
@@ -54,6 +58,15 @@ Module.locateFile = url => {
 };
 
 // end include: ./src/locateFile.js
+// Sometimes an existing Module object exists with properties
+// meant to overwrite the default module functionality. Here
+// we collect those properties and reapply _after_ we configure
+// the current environment's defaults to avoid having to be so
+// defensive during initialization.
+var moduleOverrides = {
+  ...Module
+};
+
 var arguments_ = [];
 
 var thisProgram = "./this.program";
@@ -61,8 +74,6 @@ var thisProgram = "./this.program";
 var quit_ = (status, toThrow) => {
   throw toThrow;
 };
-
-var _scriptName = import.meta.url;
 
 // `/` should be present at the end if `scriptDirectory` is not empty
 var scriptDirectory = "";
@@ -83,9 +94,29 @@ if (ENVIRONMENT_IS_SHELL) {
 // Node.js workers are detected as a combination of ENVIRONMENT_IS_WORKER and
 // ENVIRONMENT_IS_NODE.
 if (ENVIRONMENT_IS_WEB || ENVIRONMENT_IS_WORKER) {
-  try {
-    scriptDirectory = new URL(".", _scriptName).href;
-  } catch {}
+  if (ENVIRONMENT_IS_WORKER) {
+    // Check worker, not web, since window could be polyfilled
+    scriptDirectory = self.location.href;
+  } else if (typeof document != "undefined" && document.currentScript) {
+    // web
+    scriptDirectory = document.currentScript.src;
+  }
+  // When MODULARIZE, this JS may be executed later, after document.currentScript
+  // is gone, so we saved it, and we use it here instead of any other info.
+  if (_scriptName) {
+    scriptDirectory = _scriptName;
+  }
+  // blob urls look like blob:http://site.com/etc/etc and we cannot infer anything from them.
+  // otherwise, slice off the final part of the url to find the script directory.
+  // if scriptDirectory does not contain a slash, lastIndexOf will return -1,
+  // and scriptDirectory will correctly be replaced with an empty string.
+  // If scriptDirectory contains a query (starting with ?) or a fragment (starting with #),
+  // they are removed because they could contain a slash.
+  if (scriptDirectory.startsWith("blob:")) {
+    scriptDirectory = "";
+  } else {
+    scriptDirectory = scriptDirectory.slice(0, scriptDirectory.replace(/[?#].*/, "").lastIndexOf("/") + 1);
+  }
   if (!(typeof window == "object" || typeof WorkerGlobalScope != "undefined")) throw new Error("not compiled for this environment (did you build to HTML and try to run it not on the web, or set ENVIRONMENT to something - like node - and run it someplace else - like on the web?)");
   {
     // include: web_or_worker_shell_read.js
@@ -113,9 +144,58 @@ if (ENVIRONMENT_IS_WEB || ENVIRONMENT_IS_WORKER) {
   throw new Error("environment detection error");
 }
 
-var out = console.log.bind(console);
+var out = Module["print"] || console.log.bind(console);
 
-var err = console.error.bind(console);
+var err = Module["printErr"] || console.error.bind(console);
+
+// Merge back in the overrides
+Object.assign(Module, moduleOverrides);
+
+// Free the object hierarchy contained in the overrides, this lets the GC
+// reclaim data used.
+moduleOverrides = null;
+
+checkIncomingModuleAPI();
+
+// Emit code to handle expected values on the Module object. This applies Module.x
+// to the proper local x. This has two benefits: first, we only emit it if it is
+// expected to arrive, and second, by using a local everywhere else that can be
+// minified.
+if (Module["arguments"]) arguments_ = Module["arguments"];
+
+legacyModuleProp("arguments", "arguments_");
+
+if (Module["thisProgram"]) thisProgram = Module["thisProgram"];
+
+legacyModuleProp("thisProgram", "thisProgram");
+
+// perform assertions in shell.js after we set up out() and err(), as otherwise if an assertion fails it cannot print the message
+// Assertions on removed incoming Module JS APIs.
+assert(typeof Module["memoryInitializerPrefixURL"] == "undefined", "Module.memoryInitializerPrefixURL option was removed, use Module.locateFile instead");
+
+assert(typeof Module["pthreadMainPrefixURL"] == "undefined", "Module.pthreadMainPrefixURL option was removed, use Module.locateFile instead");
+
+assert(typeof Module["cdInitializerPrefixURL"] == "undefined", "Module.cdInitializerPrefixURL option was removed, use Module.locateFile instead");
+
+assert(typeof Module["filePackagePrefixURL"] == "undefined", "Module.filePackagePrefixURL option was removed, use Module.locateFile instead");
+
+assert(typeof Module["read"] == "undefined", "Module.read option was removed");
+
+assert(typeof Module["readAsync"] == "undefined", "Module.readAsync option was removed (modify readAsync in JS)");
+
+assert(typeof Module["readBinary"] == "undefined", "Module.readBinary option was removed (modify readBinary in JS)");
+
+assert(typeof Module["setWindowTitle"] == "undefined", "Module.setWindowTitle option was removed (modify emscripten_set_window_title in JS)");
+
+assert(typeof Module["TOTAL_MEMORY"] == "undefined", "Module.TOTAL_MEMORY has been renamed Module.INITIAL_MEMORY");
+
+legacyModuleProp("asm", "wasmExports");
+
+legacyModuleProp("readAsync", "readAsync");
+
+legacyModuleProp("readBinary", "readBinary");
+
+legacyModuleProp("setWindowTitle", "setWindowTitle");
 
 var IDBFS = "IDBFS is no longer included by default; build with -lidbfs.js";
 
@@ -133,8 +213,6 @@ var OPFS = "OPFS is no longer included by default; build with -lopfs.js";
 
 var NODEFS = "NODEFS is no longer included by default; build with -lnodefs.js";
 
-// perform assertions in shell.js after we set up out() and err(), as otherwise
-// if an assertion fails it cannot print the message
 assert(!ENVIRONMENT_IS_NODE, "node environment detected but not enabled at build time.  Add `node` to `-sENVIRONMENT` to enable.");
 
 assert(!ENVIRONMENT_IS_SHELL, "shell environment detected but not enabled at build time.  Add `shell` to `-sENVIRONMENT` to enable.");
@@ -149,7 +227,9 @@ assert(!ENVIRONMENT_IS_SHELL, "shell environment detected but not enabled at bui
 // You can also build docs locally as HTML or other formats in site/
 // An online HTML version (which may be of a different version of Emscripten)
 //    is up at http://kripken.github.io/emscripten-site/docs/api_reference/preamble.js.html
-var wasmBinary;
+var wasmBinary = Module["wasmBinary"];
+
+legacyModuleProp("wasmBinary", "wasmBinary");
 
 if (typeof WebAssembly != "object") {
   err("no native wasm support detected");
@@ -233,17 +313,6 @@ function checkStackCookie() {
 // include: runtime_exceptions.js
 // end include: runtime_exceptions.js
 // include: runtime_debug.js
-var runtimeDebug = true;
-
-// Switch to false at runtime to disable logging at the right times
-// Used by XXXXX_DEBUG settings to output debug messages.
-function dbg(...args) {
-  if (!runtimeDebug && typeof runtimeDebug != "undefined") return;
-  // TODO(sbc): Make this configurable somehow.  Its not always convenient for
-  // logging to show up as warnings.
-  console.warn(...args);
-}
-
 // Endianness check
 (() => {
   var h16 = new Int16Array(1);
@@ -251,6 +320,22 @@ function dbg(...args) {
   h16[0] = 25459;
   if (h8[0] !== 115 || h8[1] !== 99) throw "Runtime error: expected the system to be little-endian! (Run with -sSUPPORT_BIG_ENDIAN to bypass)";
 })();
+
+if (Module["ENVIRONMENT"]) {
+  throw new Error("Module.ENVIRONMENT has been deprecated. To force the environment, use the ENVIRONMENT compile-time option (for example, -sENVIRONMENT=web or -sENVIRONMENT=node)");
+}
+
+function legacyModuleProp(prop, newName, incoming = true) {
+  if (!Object.getOwnPropertyDescriptor(Module, prop)) {
+    Object.defineProperty(Module, prop, {
+      configurable: true,
+      get() {
+        let extra = incoming ? " (the initial value can be provided on Module, but after startup the value is only looked for on a local variable of that name)" : "";
+        abort(`\`Module.${prop}\` has been replaced by \`${newName}\`` + extra);
+      }
+    });
+  }
+}
 
 function consumedModuleProp(prop) {
   if (!Object.getOwnPropertyDescriptor(Module, prop)) {
@@ -337,6 +422,17 @@ function unexportedRuntimeSymbol(sym) {
       }
     });
   }
+}
+
+var runtimeDebug = true;
+
+// Switch to false at runtime to disable logging at the right times
+// Used by XXXXX_DEBUG settings to output debug messages.
+function dbg(...args) {
+  if (!runtimeDebug && typeof runtimeDebug != "undefined") return;
+  // TODO(sbc): Make this configurable somehow.  Its not always convenient for
+  // logging to show up as warnings.
+  console.warn(...args);
 }
 
 // end include: runtime_debug.js
@@ -1285,20 +1381,27 @@ WasmOffsetConverter.prototype.getName = function(offset) {
 // end include: wasm_offset_converter.js
 function updateMemoryViews() {
   var b = wasmMemory.buffer;
-  HEAP8 = new Int8Array(b);
-  HEAP16 = new Int16Array(b);
-  HEAPU8 = new Uint8Array(b);
-  HEAPU16 = new Uint16Array(b);
-  HEAP32 = new Int32Array(b);
-  HEAPU32 = new Uint32Array(b);
-  HEAPF32 = new Float32Array(b);
-  HEAPF64 = new Float64Array(b);
-  HEAP64 = new BigInt64Array(b);
-  HEAPU64 = new BigUint64Array(b);
+  Module["HEAP8"] = HEAP8 = new Int8Array(b);
+  Module["HEAP16"] = HEAP16 = new Int16Array(b);
+  Module["HEAPU8"] = HEAPU8 = new Uint8Array(b);
+  Module["HEAPU16"] = HEAPU16 = new Uint16Array(b);
+  Module["HEAP32"] = HEAP32 = new Int32Array(b);
+  Module["HEAPU32"] = HEAPU32 = new Uint32Array(b);
+  Module["HEAPF32"] = HEAPF32 = new Float32Array(b);
+  Module["HEAPF64"] = HEAPF64 = new Float64Array(b);
+  Module["HEAP64"] = HEAP64 = new BigInt64Array(b);
+  Module["HEAPU64"] = HEAPU64 = new BigUint64Array(b);
 }
 
 // end include: runtime_shared.js
+assert(!Module["STACK_SIZE"], "STACK_SIZE can no longer be set at runtime.  Use -sSTACK_SIZE at link time");
+
 assert(typeof Int32Array != "undefined" && typeof Float64Array !== "undefined" && Int32Array.prototype.subarray != undefined && Int32Array.prototype.set != undefined, "JS engine does not provide full typed array support");
+
+// If memory is defined in wasm, the user can't provide it, or set INITIAL_MEMORY
+assert(!Module["wasmMemory"], "Use of `wasmMemory` detected.  Use -sIMPORTED_MEMORY to define wasmMemory externally");
+
+assert(!Module["INITIAL_MEMORY"], "Detected runtime INITIAL_MEMORY setting.  Use -sIMPORTED_MEMORY to define wasmMemory dynamically");
 
 function preRun() {
   if (Module["preRun"]) {
@@ -1308,7 +1411,6 @@ function preRun() {
     }
   }
   consumedModuleProp("preRun");
-  // Begin ATPRERUNS hooks
   callRuntimeCallbacks(onPreRuns);
 }
 
@@ -1316,32 +1418,25 @@ function initRuntime() {
   assert(!runtimeInitialized);
   runtimeInitialized = true;
   checkStackCookie();
-  // Begin ATINITS hooks
   if (!Module["noFSInit"] && !FS.initialized) FS.init();
   TTY.init();
   PIPEFS.root = FS.mount(PIPEFS, {}, null);
-  // End ATINITS hooks
   wasmExports["__wasm_call_ctors"]();
-  // Begin ATPOSTCTORS hooks
   FS.ignorePermissions = false;
 }
 
 function exitRuntime() {
   assert(!runtimeExited);
   checkStackCookie();
-  // PThreads reuse the runtime from the main thread.
   ___funcs_on_exit();
   // Native atexit() functions
-  // Begin ATEXITS hooks
   FS.quit();
   TTY.shutdown();
-  // End ATEXITS hooks
   runtimeExited = true;
 }
 
 function postRun() {
   checkStackCookie();
-  // PThreads reuse the runtime from the main thread.
   if (Module["postRun"]) {
     if (typeof Module["postRun"] == "function") Module["postRun"] = [ Module["postRun"] ];
     while (Module["postRun"].length) {
@@ -1349,7 +1444,6 @@ function postRun() {
     }
   }
   consumedModuleProp("postRun");
-  // Begin ATPOSTRUNS hooks
   callRuntimeCallbacks(onPostRuns);
 }
 
@@ -1616,7 +1710,8 @@ async function createWasm() {
     return new Promise((resolve, reject) => {
       try {
         Module["instantiateWasm"](info, (mod, inst) => {
-          resolve(receiveInstance(mod, inst));
+          receiveInstance(mod, inst);
+          resolve(mod.exports);
         });
       } catch (e) {
         err(`Module.instantiateWasm callback failed with error: ${e}`);
@@ -1713,11 +1808,11 @@ var callRuntimeCallbacks = callbacks => {
 
 var onPostRuns = [];
 
-var addOnPostRun = cb => onPostRuns.push(cb);
+var addOnPostRun = cb => onPostRuns.unshift(cb);
 
 var onPreRuns = [];
 
-var addOnPreRun = cb => onPreRuns.push(cb);
+var addOnPreRun = cb => onPreRuns.unshift(cb);
 
 /**
      * @param {number} ptr
@@ -1754,7 +1849,7 @@ var addOnPreRun = cb => onPreRuns.push(cb);
   }
 }
 
-var noExitRuntime = false;
+var noExitRuntime = Module["noExitRuntime"] || false;
 
 var ptrToString = ptr => {
   assert(typeof ptr === "number");
@@ -2532,9 +2627,11 @@ var asyncLoad = async url => {
   return new Uint8Array(arrayBuffer);
 };
 
-var FS_createDataFile = (...args) => FS.createDataFile(...args);
+var FS_createDataFile = (parent, name, fileData, canRead, canWrite, canOwn) => {
+  FS.createDataFile(parent, name, fileData, canRead, canWrite, canOwn);
+};
 
-var preloadPlugins = [];
+var preloadPlugins = Module["preloadPlugins"] || [];
 
 var FS_handledByPreloadPlugin = (byteArray, fullname, finish, onerror) => {
   // Ensure plugins are ready.
@@ -2855,12 +2952,7 @@ var FS = {
         }
         if (parts[i] === "..") {
           current_path = PATH.dirname(current_path);
-          if (FS.isRoot(current)) {
-            path = current_path + "/" + parts.slice(i + 1).join("/");
-            continue linkloop;
-          } else {
-            current = current.parent;
-          }
+          current = current.parent;
           continue;
         }
         current_path = PATH.join2(current_path, parts[i]);
@@ -6477,15 +6569,23 @@ var getEnvStrings = () => {
   return getEnvStrings.strings;
 };
 
+var stringToAscii = (str, buffer) => {
+  for (var i = 0; i < str.length; ++i) {
+    assert(str.charCodeAt(i) === (str.charCodeAt(i) & 255));
+    _asan_js_store_1(buffer++, str.charCodeAt(i));
+  }
+  // Null-terminate the string
+  _asan_js_store_1(buffer, 0);
+};
+
 var _environ_get = (__environ, environ_buf) => {
   var bufSize = 0;
-  var envp = 0;
-  for (var string of getEnvStrings()) {
+  getEnvStrings().forEach((string, i) => {
     var ptr = environ_buf + bufSize;
-    _asan_js_store_4u((((__environ) + (envp)) >> 2), ptr);
-    bufSize += stringToUTF8(string, ptr, Infinity) + 1;
-    envp += 4;
-  }
+    _asan_js_store_4u((((__environ) + (i * 4)) >> 2), ptr);
+    stringToAscii(string, ptr);
+    bufSize += string.length + 1;
+  });
   return 0;
 };
 
@@ -6493,9 +6593,7 @@ var _environ_sizes_get = (penviron_count, penviron_buf_size) => {
   var strings = getEnvStrings();
   _asan_js_store_4u(((penviron_count) >> 2), strings.length);
   var bufSize = 0;
-  for (var string of strings) {
-    bufSize += lengthBytesUTF8(string) + 1;
-  }
+  strings.forEach(string => bufSize += string.length + 1);
   _asan_js_store_4u(((penviron_buf_size) >> 2), bufSize);
   return 0;
 };
@@ -6651,50 +6749,6 @@ init_emval();
 EmscriptenTrace.init();
 
 // End JS library code
-// include: postlibrary.js
-// This file is included after the automatically-generated JS library code
-// but before the wasm module is created.
-{
-  // Begin ATMODULES hooks
-  if (Module["noExitRuntime"]) noExitRuntime = Module["noExitRuntime"];
-  if (Module["preloadPlugins"]) preloadPlugins = Module["preloadPlugins"];
-  if (Module["print"]) out = Module["print"];
-  if (Module["printErr"]) err = Module["printErr"];
-  if (Module["wasmBinary"]) wasmBinary = Module["wasmBinary"];
-  // End ATMODULES hooks
-  checkIncomingModuleAPI();
-  if (Module["arguments"]) arguments_ = Module["arguments"];
-  if (Module["thisProgram"]) thisProgram = Module["thisProgram"];
-  // Assertions on removed incoming Module JS APIs.
-  assert(typeof Module["memoryInitializerPrefixURL"] == "undefined", "Module.memoryInitializerPrefixURL option was removed, use Module.locateFile instead");
-  assert(typeof Module["pthreadMainPrefixURL"] == "undefined", "Module.pthreadMainPrefixURL option was removed, use Module.locateFile instead");
-  assert(typeof Module["cdInitializerPrefixURL"] == "undefined", "Module.cdInitializerPrefixURL option was removed, use Module.locateFile instead");
-  assert(typeof Module["filePackagePrefixURL"] == "undefined", "Module.filePackagePrefixURL option was removed, use Module.locateFile instead");
-  assert(typeof Module["read"] == "undefined", "Module.read option was removed");
-  assert(typeof Module["readAsync"] == "undefined", "Module.readAsync option was removed (modify readAsync in JS)");
-  assert(typeof Module["readBinary"] == "undefined", "Module.readBinary option was removed (modify readBinary in JS)");
-  assert(typeof Module["setWindowTitle"] == "undefined", "Module.setWindowTitle option was removed (modify emscripten_set_window_title in JS)");
-  assert(typeof Module["TOTAL_MEMORY"] == "undefined", "Module.TOTAL_MEMORY has been renamed Module.INITIAL_MEMORY");
-  assert(typeof Module["ENVIRONMENT"] == "undefined", "Module.ENVIRONMENT has been deprecated. To force the environment, use the ENVIRONMENT compile-time option (for example, -sENVIRONMENT=web or -sENVIRONMENT=node)");
-  assert(typeof Module["STACK_SIZE"] == "undefined", "STACK_SIZE can no longer be set at runtime.  Use -sSTACK_SIZE at link time");
-  // If memory is defined in wasm, the user can't provide it, or set INITIAL_MEMORY
-  assert(typeof Module["wasmMemory"] == "undefined", "Use of `wasmMemory` detected.  Use -sIMPORTED_MEMORY to define wasmMemory externally");
-  assert(typeof Module["INITIAL_MEMORY"] == "undefined", "Detected runtime INITIAL_MEMORY setting.  Use -sIMPORTED_MEMORY to define wasmMemory dynamically");
-}
-
-// Begin runtime exports
-var missingLibrarySymbols = [ "writeI53ToI64", "writeI53ToI64Clamped", "writeI53ToI64Signaling", "writeI53ToU64Clamped", "writeI53ToU64Signaling", "readI53FromI64", "readI53FromU64", "convertI32PairToI53", "convertI32PairToI53Checked", "convertU32PairToI53", "stackAlloc", "getTempRet0", "setTempRet0", "inetPton4", "inetNtop4", "inetPton6", "inetNtop6", "readSockaddr", "writeSockaddr", "emscriptenLog", "readEmAsmArgs", "jstoi_q", "listenOnce", "autoResumeAudioContext", "getDynCaller", "dynCall", "handleException", "runtimeKeepalivePush", "runtimeKeepalivePop", "callUserCallback", "maybeExit", "asmjsMangle", "HandleAllocator", "getNativeTypeSize", "addOnInit", "addOnPostCtor", "addOnPreMain", "addOnExit", "STACK_SIZE", "STACK_ALIGN", "POINTER_SIZE", "ASSERTIONS", "getCFunc", "ccall", "cwrap", "uleb128Encode", "sigToWasmTypes", "generateFuncType", "convertJsFunctionToWasm", "getEmptyTableSlot", "updateTableMap", "getFunctionAddress", "addFunction", "removeFunction", "reallyNegative", "unSign", "strLen", "reSign", "formatString", "intArrayToString", "AsciiToString", "stringToAscii", "stringToUTF8OnStack", "writeArrayToMemory", "registerKeyEventCallback", "maybeCStringToJsString", "findEventTarget", "getBoundingClientRect", "fillMouseEventData", "registerMouseEventCallback", "registerWheelEventCallback", "registerUiEventCallback", "registerFocusEventCallback", "fillDeviceOrientationEventData", "registerDeviceOrientationEventCallback", "fillDeviceMotionEventData", "registerDeviceMotionEventCallback", "screenOrientation", "fillOrientationChangeEventData", "registerOrientationChangeEventCallback", "fillFullscreenChangeEventData", "registerFullscreenChangeEventCallback", "JSEvents_requestFullscreen", "JSEvents_resizeCanvasForFullscreen", "registerRestoreOldStyle", "hideEverythingExceptGivenElement", "restoreHiddenElements", "setLetterbox", "softFullscreenResizeWebGLRenderTarget", "doRequestFullscreen", "fillPointerlockChangeEventData", "registerPointerlockChangeEventCallback", "registerPointerlockErrorEventCallback", "requestPointerLock", "fillVisibilityChangeEventData", "registerVisibilityChangeEventCallback", "registerTouchEventCallback", "fillGamepadEventData", "registerGamepadEventCallback", "registerBeforeUnloadEventCallback", "fillBatteryEventData", "battery", "registerBatteryEventCallback", "setCanvasElementSize", "getCanvasElementSize", "getCallstack", "wasiRightsToMuslOFlags", "wasiOFlagsToMuslOFlags", "safeSetTimeout", "setImmediateWrapped", "safeRequestAnimationFrame", "clearImmediateWrapped", "registerPostMainLoop", "registerPreMainLoop", "getPromise", "makePromise", "idsToPromises", "makePromiseCallback", "ExceptionInfo", "findMatchingCatch", "Browser_asyncPrepareDataCounter", "arraySum", "addDays", "getSocketFromFD", "getSocketAddress", "FS_mkdirTree", "_setNetworkCallback", "heapObjectForWebGLType", "toTypedArrayIndex", "webgl_enable_ANGLE_instanced_arrays", "webgl_enable_OES_vertex_array_object", "webgl_enable_WEBGL_draw_buffers", "webgl_enable_WEBGL_multi_draw", "webgl_enable_EXT_polygon_offset_clamp", "webgl_enable_EXT_clip_control", "webgl_enable_WEBGL_polygon_mode", "emscriptenWebGLGet", "computeUnpackAlignedImageSize", "colorChannelsInGlTextureFormat", "emscriptenWebGLGetTexPixelData", "emscriptenWebGLGetUniform", "webglGetUniformLocation", "webglPrepareUniformLocationsBeforeFirstUse", "webglGetLeftBracePos", "emscriptenWebGLGetVertexAttrib", "__glGetActiveAttribOrUniform", "writeGLArray", "registerWebGlEventCallback", "runAndAbortIfError", "ALLOC_NORMAL", "ALLOC_STACK", "allocate", "writeStringToMemory", "writeAsciiToMemory", "demangle", "stackTrace", "getFunctionArgsName", "createJsInvokerSignature", "PureVirtualError", "getBasestPointer", "registerInheritedInstance", "unregisterInheritedInstance", "getInheritedInstance", "getInheritedInstanceCount", "getLiveInheritedInstances", "enumReadValueFromPointer", "genericPointerToWireType", "constNoSmartPtrRawPointerToWireType", "nonConstNoSmartPtrRawPointerToWireType", "init_RegisteredPointer", "RegisteredPointer", "RegisteredPointer_fromWireType", "runDestructor", "releaseClassHandle", "detachFinalizer", "attachFinalizer", "makeClassHandle", "init_ClassHandle", "ClassHandle", "throwInstanceAlreadyDeleted", "flushPendingDeletes", "setDelayFunction", "RegisteredClass", "shallowCopyInternalPointer", "downcastPointer", "upcastPointer", "validateThis", "char_0", "char_9", "makeLegalFunctionName", "getStringOrSymbol", "emval_get_global", "emval_returnValue", "emval_lookupTypes", "emval_addMethodCaller" ];
-
-missingLibrarySymbols.forEach(missingLibrarySymbol);
-
-var unexportedSymbols = [ "run", "addRunDependency", "removeRunDependency", "out", "err", "callMain", "abort", "wasmMemory", "wasmExports", "HEAPF32", "HEAPF64", "HEAP8", "HEAPU8", "HEAP16", "HEAPU16", "HEAP32", "HEAPU32", "HEAP64", "HEAPU64", "WasmOffsetConverter", "WasmSourceMap", "writeStackCookie", "checkStackCookie", "INT53_MAX", "INT53_MIN", "bigintToI53Checked", "stackSave", "stackRestore", "ptrToString", "zeroMemory", "exitJS", "getHeapMax", "growMemory", "ENV", "ERRNO_CODES", "strError", "DNS", "Protocols", "Sockets", "timers", "warnOnce", "withBuiltinMalloc", "readEmAsmArgsArray", "getExecutableName", "keepRuntimeAlive", "asyncLoad", "alignMemory", "mmapAlloc", "wasmTable", "noExitRuntime", "addOnPreRun", "addOnPostRun", "freeTableIndexes", "functionsInTableMap", "setValue", "getValue", "PATH", "PATH_FS", "UTF8Decoder", "UTF8ArrayToString", "UTF8ToString", "stringToUTF8Array", "stringToUTF8", "lengthBytesUTF8", "intArrayFromString", "UTF16Decoder", "UTF16ToString", "stringToUTF16", "lengthBytesUTF16", "UTF32ToString", "stringToUTF32", "lengthBytesUTF32", "stringToNewUTF8", "JSEvents", "specialHTMLTargets", "findCanvasEventTarget", "currentFullscreenStrategy", "restoreOldWindowedStyle", "jsStackTrace", "UNWIND_CACHE", "convertPCtoSourceLocation", "ExitStatus", "getEnvStrings", "checkWasiClock", "doReadv", "doWritev", "initRandomFill", "randomFill", "emSetImmediate", "emClearImmediate_deps", "emClearImmediate", "promiseMap", "uncaughtExceptionCount", "exceptionLast", "exceptionCaught", "Browser", "getPreloadedImageData__data", "wget", "MONTH_DAYS_REGULAR", "MONTH_DAYS_LEAP", "MONTH_DAYS_REGULAR_CUMULATIVE", "MONTH_DAYS_LEAP_CUMULATIVE", "isLeapYear", "ydayFromDate", "SYSCALLS", "preloadPlugins", "FS_createPreloadedFile", "FS_modeStringToFlags", "FS_getMode", "FS_stdin_getChar_buffer", "FS_stdin_getChar", "FS_unlink", "FS_createPath", "FS_createDevice", "FS_readFile", "FS", "FS_root", "FS_mounts", "FS_devices", "FS_streams", "FS_nextInode", "FS_nameTable", "FS_currentPath", "FS_initialized", "FS_ignorePermissions", "FS_filesystems", "FS_syncFSRequests", "FS_readFiles", "FS_lookupPath", "FS_getPath", "FS_hashName", "FS_hashAddNode", "FS_hashRemoveNode", "FS_lookupNode", "FS_createNode", "FS_destroyNode", "FS_isRoot", "FS_isMountpoint", "FS_isFile", "FS_isDir", "FS_isLink", "FS_isChrdev", "FS_isBlkdev", "FS_isFIFO", "FS_isSocket", "FS_flagsToPermissionString", "FS_nodePermissions", "FS_mayLookup", "FS_mayCreate", "FS_mayDelete", "FS_mayOpen", "FS_checkOpExists", "FS_nextfd", "FS_getStreamChecked", "FS_getStream", "FS_createStream", "FS_closeStream", "FS_dupStream", "FS_doSetAttr", "FS_chrdev_stream_ops", "FS_major", "FS_minor", "FS_makedev", "FS_registerDevice", "FS_getDevice", "FS_getMounts", "FS_syncfs", "FS_mount", "FS_unmount", "FS_lookup", "FS_mknod", "FS_statfs", "FS_statfsStream", "FS_statfsNode", "FS_create", "FS_mkdir", "FS_mkdev", "FS_symlink", "FS_rename", "FS_rmdir", "FS_readdir", "FS_readlink", "FS_stat", "FS_fstat", "FS_lstat", "FS_doChmod", "FS_chmod", "FS_lchmod", "FS_fchmod", "FS_doChown", "FS_chown", "FS_lchown", "FS_fchown", "FS_doTruncate", "FS_truncate", "FS_ftruncate", "FS_utime", "FS_open", "FS_close", "FS_isClosed", "FS_llseek", "FS_read", "FS_write", "FS_mmap", "FS_msync", "FS_ioctl", "FS_writeFile", "FS_cwd", "FS_chdir", "FS_createDefaultDirectories", "FS_createDefaultDevices", "FS_createSpecialDirectories", "FS_createStandardStreams", "FS_staticInit", "FS_init", "FS_quit", "FS_findObject", "FS_analyzePath", "FS_createFile", "FS_createDataFile", "FS_forceLoadFile", "FS_createLazyFile", "FS_absolutePath", "FS_createFolder", "FS_createLink", "FS_joinPath", "FS_mmapAlloc", "FS_standardizePath", "MEMFS", "TTY", "PIPEFS", "SOCKFS", "tempFixedLengthArray", "miniTempWebGLFloatBuffers", "miniTempWebGLIntBuffers", "GL", "AL", "GLUT", "EGL", "GLEW", "IDBStore", "SDL", "SDL_gfx", "allocateUTF8", "allocateUTF8OnStack", "print", "printErr", "jstoi_s", "EmscriptenTrace", "traceConfigure", "traceLogMessage", "traceMark", "traceEnterContext", "InternalError", "BindingError", "throwInternalError", "throwBindingError", "registeredTypes", "awaitingDependencies", "typeDependencies", "tupleRegistrations", "structRegistrations", "sharedRegisterType", "whenDependentTypesAreResolved", "embind_charCodes", "embind_init_charCodes", "readLatin1String", "getTypeName", "getFunctionName", "heap32VectorToArray", "requireRegisteredType", "usesDestructorStack", "checkArgCount", "getRequiredArgCount", "createJsInvoker", "UnboundTypeError", "GenericWireTypeSize", "EmValType", "EmValOptionalType", "throwUnboundTypeError", "ensureOverloadTable", "exposePublicSymbol", "replacePublicSymbol", "createNamedFunction", "embindRepr", "registeredInstances", "registeredPointers", "registerType", "integerReadValueFromPointer", "floatReadValueFromPointer", "readPointer", "runDestructors", "craftInvokerFunction", "embind__requireFunction", "finalizationRegistry", "detachFinalizer_deps", "deletionQueue", "delayFunction", "emval_freelist", "emval_handles", "emval_symbols", "init_emval", "count_emval_handles", "Emval", "emval_methodCallers", "reflectConstruct" ];
-
-unexportedSymbols.forEach(unexportedRuntimeSymbol);
-
-// End runtime exports
-// Begin JS library exports
-// End JS library exports
-// end include: postlibrary.js
 function checkIncomingModuleAPI() {
   ignoredModuleProp("fetchSettings");
 }
@@ -6763,21 +6817,17 @@ var ___wasm_call_ctors = createExportWrapper("__wasm_call_ctors", 0);
 
 var ___getTypeName = createExportWrapper("__getTypeName", 1);
 
-var _free = createExportWrapper("free", 1);
+var _free = Module["_free"] = createExportWrapper("free", 1);
 
 var _calloc = createExportWrapper("calloc", 2);
 
-var _malloc = createExportWrapper("malloc", 1);
+var _malloc = Module["_malloc"] = createExportWrapper("malloc", 1);
 
 var _fflush = createExportWrapper("fflush", 1);
 
 var ___funcs_on_exit = createExportWrapper("__funcs_on_exit", 0);
 
 var _emscripten_builtin_malloc = createExportWrapper("emscripten_builtin_malloc", 1);
-
-var _emscripten_stack_get_end = wasmExports["emscripten_stack_get_end"];
-
-var _emscripten_stack_get_base = wasmExports["emscripten_stack_get_base"];
 
 var _strerror = createExportWrapper("strerror", 1);
 
@@ -6794,6 +6844,10 @@ var _memalign = createExportWrapper("memalign", 2);
 var _emscripten_stack_init = wasmExports["emscripten_stack_init"];
 
 var _emscripten_stack_get_free = wasmExports["emscripten_stack_get_free"];
+
+var _emscripten_stack_get_base = wasmExports["emscripten_stack_get_base"];
+
+var _emscripten_stack_get_end = wasmExports["emscripten_stack_get_end"];
 
 var __emscripten_stack_restore = wasmExports["_emscripten_stack_restore"];
 
@@ -6841,6 +6895,14 @@ var ___heap_base = Module["___heap_base"] = 312015920;
 
 // include: postamble.js
 // === Auto-generated postamble setup entry stuff ===
+var missingLibrarySymbols = [ "writeI53ToI64", "writeI53ToI64Clamped", "writeI53ToI64Signaling", "writeI53ToU64Clamped", "writeI53ToU64Signaling", "readI53FromI64", "readI53FromU64", "convertI32PairToI53", "convertI32PairToI53Checked", "convertU32PairToI53", "stackAlloc", "getTempRet0", "setTempRet0", "inetPton4", "inetNtop4", "inetPton6", "inetNtop6", "readSockaddr", "writeSockaddr", "emscriptenLog", "readEmAsmArgs", "jstoi_q", "listenOnce", "autoResumeAudioContext", "getDynCaller", "dynCall", "handleException", "runtimeKeepalivePush", "runtimeKeepalivePop", "callUserCallback", "maybeExit", "asmjsMangle", "HandleAllocator", "getNativeTypeSize", "addOnInit", "addOnPostCtor", "addOnPreMain", "addOnExit", "STACK_SIZE", "STACK_ALIGN", "POINTER_SIZE", "ASSERTIONS", "getCFunc", "ccall", "cwrap", "uleb128Encode", "sigToWasmTypes", "generateFuncType", "convertJsFunctionToWasm", "getEmptyTableSlot", "updateTableMap", "getFunctionAddress", "addFunction", "removeFunction", "reallyNegative", "unSign", "strLen", "reSign", "formatString", "intArrayToString", "AsciiToString", "stringToUTF8OnStack", "writeArrayToMemory", "registerKeyEventCallback", "maybeCStringToJsString", "findEventTarget", "getBoundingClientRect", "fillMouseEventData", "registerMouseEventCallback", "registerWheelEventCallback", "registerUiEventCallback", "registerFocusEventCallback", "fillDeviceOrientationEventData", "registerDeviceOrientationEventCallback", "fillDeviceMotionEventData", "registerDeviceMotionEventCallback", "screenOrientation", "fillOrientationChangeEventData", "registerOrientationChangeEventCallback", "fillFullscreenChangeEventData", "registerFullscreenChangeEventCallback", "JSEvents_requestFullscreen", "JSEvents_resizeCanvasForFullscreen", "registerRestoreOldStyle", "hideEverythingExceptGivenElement", "restoreHiddenElements", "setLetterbox", "softFullscreenResizeWebGLRenderTarget", "doRequestFullscreen", "fillPointerlockChangeEventData", "registerPointerlockChangeEventCallback", "registerPointerlockErrorEventCallback", "requestPointerLock", "fillVisibilityChangeEventData", "registerVisibilityChangeEventCallback", "registerTouchEventCallback", "fillGamepadEventData", "registerGamepadEventCallback", "registerBeforeUnloadEventCallback", "fillBatteryEventData", "battery", "registerBatteryEventCallback", "setCanvasElementSize", "getCanvasElementSize", "getCallstack", "wasiRightsToMuslOFlags", "wasiOFlagsToMuslOFlags", "safeSetTimeout", "setImmediateWrapped", "safeRequestAnimationFrame", "clearImmediateWrapped", "registerPostMainLoop", "registerPreMainLoop", "getPromise", "makePromise", "idsToPromises", "makePromiseCallback", "ExceptionInfo", "findMatchingCatch", "Browser_asyncPrepareDataCounter", "arraySum", "addDays", "getSocketFromFD", "getSocketAddress", "FS_unlink", "FS_mkdirTree", "_setNetworkCallback", "heapObjectForWebGLType", "toTypedArrayIndex", "webgl_enable_ANGLE_instanced_arrays", "webgl_enable_OES_vertex_array_object", "webgl_enable_WEBGL_draw_buffers", "webgl_enable_WEBGL_multi_draw", "webgl_enable_EXT_polygon_offset_clamp", "webgl_enable_EXT_clip_control", "webgl_enable_WEBGL_polygon_mode", "emscriptenWebGLGet", "computeUnpackAlignedImageSize", "colorChannelsInGlTextureFormat", "emscriptenWebGLGetTexPixelData", "emscriptenWebGLGetUniform", "webglGetUniformLocation", "webglPrepareUniformLocationsBeforeFirstUse", "webglGetLeftBracePos", "emscriptenWebGLGetVertexAttrib", "__glGetActiveAttribOrUniform", "writeGLArray", "registerWebGlEventCallback", "runAndAbortIfError", "ALLOC_NORMAL", "ALLOC_STACK", "allocate", "writeStringToMemory", "writeAsciiToMemory", "demangle", "stackTrace", "getFunctionArgsName", "createJsInvokerSignature", "PureVirtualError", "getBasestPointer", "registerInheritedInstance", "unregisterInheritedInstance", "getInheritedInstance", "getInheritedInstanceCount", "getLiveInheritedInstances", "enumReadValueFromPointer", "genericPointerToWireType", "constNoSmartPtrRawPointerToWireType", "nonConstNoSmartPtrRawPointerToWireType", "init_RegisteredPointer", "RegisteredPointer", "RegisteredPointer_fromWireType", "runDestructor", "releaseClassHandle", "detachFinalizer", "attachFinalizer", "makeClassHandle", "init_ClassHandle", "ClassHandle", "throwInstanceAlreadyDeleted", "flushPendingDeletes", "setDelayFunction", "RegisteredClass", "shallowCopyInternalPointer", "downcastPointer", "upcastPointer", "validateThis", "char_0", "char_9", "makeLegalFunctionName", "getStringOrSymbol", "emval_get_global", "emval_returnValue", "emval_lookupTypes", "emval_addMethodCaller" ];
+
+missingLibrarySymbols.forEach(missingLibrarySymbol);
+
+var unexportedSymbols = [ "run", "addRunDependency", "removeRunDependency", "out", "err", "callMain", "abort", "wasmMemory", "wasmExports", "WasmOffsetConverter", "WasmSourceMap", "writeStackCookie", "checkStackCookie", "INT53_MAX", "INT53_MIN", "bigintToI53Checked", "stackSave", "stackRestore", "ptrToString", "zeroMemory", "exitJS", "getHeapMax", "growMemory", "ENV", "ERRNO_CODES", "strError", "DNS", "Protocols", "Sockets", "timers", "warnOnce", "withBuiltinMalloc", "readEmAsmArgsArray", "jstoi_s", "getExecutableName", "keepRuntimeAlive", "asyncLoad", "alignMemory", "mmapAlloc", "wasmTable", "noExitRuntime", "addOnPreRun", "addOnPostRun", "freeTableIndexes", "functionsInTableMap", "setValue", "getValue", "PATH", "PATH_FS", "UTF8Decoder", "UTF8ArrayToString", "UTF8ToString", "stringToUTF8Array", "stringToUTF8", "lengthBytesUTF8", "intArrayFromString", "stringToAscii", "UTF16Decoder", "UTF16ToString", "stringToUTF16", "lengthBytesUTF16", "UTF32ToString", "stringToUTF32", "lengthBytesUTF32", "stringToNewUTF8", "JSEvents", "specialHTMLTargets", "findCanvasEventTarget", "currentFullscreenStrategy", "restoreOldWindowedStyle", "jsStackTrace", "UNWIND_CACHE", "convertPCtoSourceLocation", "ExitStatus", "getEnvStrings", "checkWasiClock", "doReadv", "doWritev", "initRandomFill", "randomFill", "emSetImmediate", "emClearImmediate_deps", "emClearImmediate", "promiseMap", "uncaughtExceptionCount", "exceptionLast", "exceptionCaught", "Browser", "getPreloadedImageData__data", "wget", "MONTH_DAYS_REGULAR", "MONTH_DAYS_LEAP", "MONTH_DAYS_REGULAR_CUMULATIVE", "MONTH_DAYS_LEAP_CUMULATIVE", "isLeapYear", "ydayFromDate", "SYSCALLS", "preloadPlugins", "FS_createPreloadedFile", "FS_modeStringToFlags", "FS_getMode", "FS_stdin_getChar_buffer", "FS_stdin_getChar", "FS_createPath", "FS_createDevice", "FS_readFile", "FS", "FS_createDataFile", "FS_createLazyFile", "MEMFS", "TTY", "PIPEFS", "SOCKFS", "tempFixedLengthArray", "miniTempWebGLFloatBuffers", "miniTempWebGLIntBuffers", "GL", "AL", "GLUT", "EGL", "GLEW", "IDBStore", "SDL", "SDL_gfx", "allocateUTF8", "allocateUTF8OnStack", "print", "printErr", "EmscriptenTrace", "traceConfigure", "traceLogMessage", "traceMark", "traceEnterContext", "InternalError", "BindingError", "throwInternalError", "throwBindingError", "registeredTypes", "awaitingDependencies", "typeDependencies", "tupleRegistrations", "structRegistrations", "sharedRegisterType", "whenDependentTypesAreResolved", "embind_charCodes", "embind_init_charCodes", "readLatin1String", "getTypeName", "getFunctionName", "heap32VectorToArray", "requireRegisteredType", "usesDestructorStack", "checkArgCount", "getRequiredArgCount", "createJsInvoker", "UnboundTypeError", "GenericWireTypeSize", "EmValType", "EmValOptionalType", "throwUnboundTypeError", "ensureOverloadTable", "exposePublicSymbol", "replacePublicSymbol", "createNamedFunction", "embindRepr", "registeredInstances", "registeredPointers", "registerType", "integerReadValueFromPointer", "floatReadValueFromPointer", "readPointer", "runDestructors", "craftInvokerFunction", "embind__requireFunction", "finalizationRegistry", "detachFinalizer_deps", "deletionQueue", "delayFunction", "emval_freelist", "emval_handles", "emval_symbols", "init_emval", "count_emval_handles", "Emval", "emval_methodCallers", "reflectConstruct" ];
+
+unexportedSymbols.forEach(unexportedRuntimeSymbol);
+
 var calledRun;
 
 function stackCheckInit() {
@@ -6890,17 +6952,14 @@ function run() {
   checkStackCookie();
 }
 
-function preInit() {
-  if (Module["preInit"]) {
-    if (typeof Module["preInit"] == "function") Module["preInit"] = [ Module["preInit"] ];
-    while (Module["preInit"].length > 0) {
-      Module["preInit"].shift()();
-    }
+if (Module["preInit"]) {
+  if (typeof Module["preInit"] == "function") Module["preInit"] = [ Module["preInit"] ];
+  while (Module["preInit"].length > 0) {
+    Module["preInit"].pop()();
   }
-  consumedModuleProp("preInit");
 }
 
-preInit();
+consumedModuleProp("preInit");
 
 run();
 
