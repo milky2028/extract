@@ -18,6 +18,7 @@ emcc \
 EMCC_DEBUG=1 &&
 emcc \
 --memoryprofiler \
+-fsanitize=address \
 -DDEBUG \
 -sEXPORT_ES6 \
 -sEXPORTED_FUNCTIONS=_malloc,_free \
@@ -73,6 +74,7 @@ emcc \
 -o ./dist/extract.node.js &&
 EMCC_DEBUG=1 && emcc \
 --memoryprofiler \
+-fsanitize=address \
 -DDEBUG \
 -sEXPORT_ES6 \
 -sWASMFS \
