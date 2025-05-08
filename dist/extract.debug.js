@@ -6883,7 +6883,7 @@ var __asan_c_store_f = wasmExports["_asan_c_store_f"];
 
 var __asan_c_store_d = wasmExports["_asan_c_store_d"];
 
-var ___heap_base = Module["___heap_base"] = 312003488;
+var ___heap_base = Module["___heap_base"] = 312003744;
 
 // include: postamble.js
 // === Auto-generated postamble setup entry stuff ===

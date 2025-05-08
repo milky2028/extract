@@ -15,6 +15,8 @@ declare namespace RuntimeExports {
 interface WasmModule {
   _free(_0: number): void;
   _malloc(_0: number): number;
+  __ZN6__asan9FakeStack17AddrIsInFakeStackEm(_0: number, _1: number): number;
+  __ZN6__asan9FakeStack8AllocateEmmm(_0: number, _1: number, _2: number, _3: number): number;
 }
 
 interface EmbindModule {
@@ -30,6 +32,8 @@ interface EmbindModule {
   get_entry_name(_0: number): string;
   read_entry_data(_0: number, _1: number): number;
   entry_is_file(_0: number): boolean;
+  do_leak_check_fatal(): void;
+  do_leak_check_recoverable(): number;
 }
 
 export type MainModule = WasmModule & typeof RuntimeExports & EmbindModule;

@@ -34,6 +34,7 @@ emcc \
 -L/Users/tgross/Documents/GitHub/libarchive/dist/lib \
 -larchive \
 -lembind \
+--emit-tsd extract.d.ts \
 ./src/js-driven-api.cpp \
 --pre-js=./src/locateFile.js \
 -o ./dist/extract.debug.js &&
