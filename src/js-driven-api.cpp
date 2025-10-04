@@ -93,21 +93,21 @@ auto read_entry_data(intptr_t archive_ptr, size_t entry_ptr) {
 }
 
 EMSCRIPTEN_BINDINGS(module) {
-  emscripten::function("get_buffer", &get_buffer, emscripten::allow_raw_pointers());
-  emscripten::function("free_buffer", &free_buffer, emscripten::allow_raw_pointers());
+  emscripten::function("get_buffer", &get_buffer);
+  emscripten::function("free_buffer", &free_buffer);
 
   emscripten::constant("END_OF_FILE", END_OF_FILE);
   emscripten::constant("ENTRY_ERROR", ENTRY_ERROR);
 
-  emscripten::function("open_archive", &open_archive, emscripten::allow_raw_pointers());
-  emscripten::function("close_archive", &close_archive, emscripten::allow_raw_pointers());
-  emscripten::function("skip_extraction", &skip_extraction, emscripten::allow_raw_pointers());
+  emscripten::function("open_archive", &open_archive);
+  emscripten::function("close_archive", &close_archive);
+  emscripten::function("skip_extraction", &skip_extraction);
 
-  emscripten::function("get_next_entry", &get_next_entry, emscripten::allow_raw_pointers());
-  emscripten::function("get_entry_size", &get_entry_size, emscripten::allow_raw_pointers());
-  emscripten::function("get_entry_name", &get_entry_name, emscripten::allow_raw_pointers());
-  emscripten::function("read_entry_data", &read_entry_data, emscripten::allow_raw_pointers());
-  emscripten::function("entry_is_file", &entry_is_file, emscripten::allow_raw_pointers());
+  emscripten::function("get_next_entry", &get_next_entry);
+  emscripten::function("get_entry_size", &get_entry_size);
+  emscripten::function("get_entry_name", &get_entry_name);
+  emscripten::function("read_entry_data", &read_entry_data);
+  emscripten::function("entry_is_file", &entry_is_file);
 
 #if DEBUG
   emscripten::function("do_leak_check_fatal", &__lsan_do_leak_check);
