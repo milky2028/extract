@@ -103,7 +103,7 @@ void extract(extract_params params) {
 
           params.on_entry(entry_name, emscripten::typed_memory_view<uint8_t>(entry_size, entry_data_buffer));
         } else {
-          params.on_entry(entry_name, emscripten::val::null());
+          params.on_entry(entry_name, emscripten::val::undefined());
         }
       }
     }
