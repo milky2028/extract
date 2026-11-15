@@ -1,114 +1,41 @@
-emcc \
--sEXPORT_ES6 \
--sEXPORTED_FUNCTIONS=_malloc,_free \
--sALLOW_MEMORY_GROWTH \
--sENVIRONMENT=worker \
--sUSE_ZLIB=1 \
--sUSE_BZIP2=1 \
--Oz \
--std=c++20 \
--I/Users/tgross/Documents/GitHub/libarchive/dist/include \
--L/Users/tgross/Documents/GitHub/libarchive/dist/lib \
--larchive \
--lembind \
---emit-tsd extract.d.ts \
-./src/js-driven-api.cpp \
---pre-js=./src/locateFile.js \
--o ./dist/extract.js &&
-EMCC_DEBUG=1 &&
-emcc \
---memoryprofiler \
--fsanitize=address \
--DDEBUG \
--sEXPORT_ES6 \
--sEXPORTED_FUNCTIONS=_malloc,_free \
--sALLOW_MEMORY_GROWTH \
--sENVIRONMENT=worker \
--sUSE_ZLIB=1 \
--sUSE_BZIP2=1 \
--g \
--gsource-map \
--O0 \
--std=c++20 \
--I/Users/tgross/Documents/GitHub/libarchive/dist/include \
--L/Users/tgross/Documents/GitHub/libarchive/dist/lib \
--larchive \
--lembind \
---emit-tsd extract.d.ts \
-./src/js-driven-api.cpp \
---pre-js=./src/locateFile.js \
--o ./dist/extract.debug.js &&
-EMCC_DEBUG=1 &&
-emcc \
--sEXPORT_ES6 \
--sEXPORTED_FUNCTIONS=_malloc,_free \
--sALLOW_MEMORY_GROWTH \
--sENVIRONMENT=node \
--sUSE_ZLIB=1 \
--sUSE_BZIP2=1 \
--g \
--gsource-map \
--O0 \
--std=c++20 \
--I/Users/tgross/Documents/GitHub/libarchive/dist/include \
--L/Users/tgross/Documents/GitHub/libarchive/dist/lib \
--larchive \
--lembind \
-./src/js-driven-api.cpp \
---pre-js=./src/locateFile.js \
--o ./dist/extract.node.debug.js &&
-emcc \
--sEXPORT_ES6 \
--sEXPORTED_FUNCTIONS=_malloc,_free \
--sALLOW_MEMORY_GROWTH \
--sENVIRONMENT=node \
--sUSE_ZLIB=1 \
--sUSE_BZIP2=1 \
--Oz \
--std=c++20 \
--I/Users/tgross/Documents/GitHub/libarchive/dist/include \
--L/Users/tgross/Documents/GitHub/libarchive/dist/lib \
--larchive \
--lembind \
-./src/js-driven-api.cpp \
---pre-js=./src/locateFile.js \
--o ./dist/extract.node.js &&
-EMCC_DEBUG=1 && emcc \
---memoryprofiler \
--fsanitize=address \
--DDEBUG \
--sEXPORT_ES6 \
--sWASMFS \
--sALLOW_MEMORY_GROWTH \
--sENVIRONMENT=worker \
--sUSE_ZLIB=1 \
--sUSE_BZIP2=1 \
--O0 \
--g \
--gsource-map \
--std=c++20 \
--I/Users/tgross/Documents/GitHub/libarchive/dist/include \
--L/Users/tgross/Documents/GitHub/libarchive/dist/lib \
--larchive \
--lembind \
---emit-tsd extract-c.d.ts \
-./src/c-driven-api.cpp \
---pre-js=./src/locateFile.js \
--o ./dist/extract-c.debug.js &&
-emcc \
--sEXPORT_ES6 \
--sWASMFS \
--sALLOW_MEMORY_GROWTH \
--sENVIRONMENT=worker \
--sUSE_ZLIB=1 \
--sUSE_BZIP2=1 \
--Oz \
--std=c++20 \
--I/Users/tgross/Documents/GitHub/libarchive/dist/include \
--L/Users/tgross/Documents/GitHub/libarchive/dist/lib \
--larchive \
--lembind \
---emit-tsd extract-c.d.ts \
-./src/c-driven-api.cpp \
---pre-js=./src/locateFile.js \
--o ./dist/extract-c.js
+#!/usr/bin/env bash
+# Builds dist/ from src/extract.cpp.
+#
+#   LIBARCHIVE_PREFIX=/path/to/libarchive-dist ./compile
+#
+# LIBARCHIVE_PREFIX is the install prefix produced by scripts/build-libarchive.sh.
+set -euo pipefail
+
+: "${LIBARCHIVE_PREFIX:?set LIBARCHIVE_PREFIX (see scripts/build-libarchive.sh)}"
+
+export PATH="$PWD/node_modules/.bin:$PATH" # tsc for --emit-tsd
+rm -rf dist && mkdir dist
+
+common=(
+  src/extract.cpp
+  -std=c++20
+  -I"$LIBARCHIVE_PREFIX/include"
+  -L"$LIBARCHIVE_PREFIX/lib"
+  -larchive
+  -sUSE_ZLIB=1
+  -sUSE_BZIP2=1
+  -lembind
+  -sEXPORT_ES6
+  -sALLOW_MEMORY_GROWTH
+  -sSTACK_SIZE=1MB
+  -sFILESYSTEM=1
+  -sEXPORTED_RUNTIME_METHODS=FS
+  -fno-exceptions
+  --pre-js src/locateFile.js
+)
+
+# Browser build: runs in a dedicated worker and reads Files through WORKERFS.
+browser=(-sENVIRONMENT=worker -lworkerfs.js --emit-tsd extract.d.ts)
+
+em++ "${common[@]}" "${browser[@]}" -O3 -flto -o dist/extract.js
+em++ "${common[@]}" "${browser[@]}" -O0 -g -sASSERTIONS=2 -o dist/extract.debug.js
+
+# Node build: used by the test suite, reads the real filesystem directly.
+em++ "${common[@]}" -sENVIRONMENT=node -sNODERAWFS=1 -O3 -o dist/extract.node.js
+
+ls -la dist

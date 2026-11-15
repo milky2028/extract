@@ -1,1 +1,0 @@
-z emsdk && source ./emsdk_env.sh && z extract
