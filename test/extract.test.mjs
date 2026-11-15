@@ -30,30 +30,41 @@ function fileSource(path) {
 	return source;
 }
 
+/** Opens an archive or fails the test with libarchive's message. */
 function open(source) {
-	return wasm.open_archive(source);
+	const { handle, error } = wasm.open_archive(source);
+	assert.equal(error, undefined, error);
+	assert.equal(typeof handle, 'number');
+	return handle;
+}
+
+/** Iterates entries until the end of the archive, failing the test on an error. */
+function* entries(handle) {
+	for (;;) {
+		const { entry, error } = wasm.next_entry(handle);
+		assert.equal(error, undefined, error);
+		if (!entry) return;
+		yield entry;
+	}
 }
 
 function readAll(path) {
 	const source = fileSource(path);
 	const handle = open(source);
-	assert.notEqual(handle, 0, `open failed: ${wasm.last_open_error()}`);
-	const entries = new Map();
+	const files = new Map();
 	try {
-		for (;;) {
-			const entry = wasm.next_entry(handle);
-			if (entry === null) break;
-			assert.equal(entry.error, undefined, entry.error);
+		for (const entry of entries(handle)) {
 			if (!entry.isFile) continue;
-			const data = wasm.read_entry(handle);
-			assert.ok(data instanceof Uint8Array, data?.error);
-			entries.set(entry.path, data);
+			const { data, error } = wasm.read_entry(handle);
+			assert.equal(error, undefined, error);
+			assert.ok(data instanceof Uint8Array);
+			files.set(entry.path, data);
 		}
 	} finally {
 		wasm.close_archive(handle);
 		source.close();
 	}
-	return entries;
+	return files;
 }
 
 function makeFixture() {
@@ -91,47 +102,68 @@ const { dir, files } = makeFixture();
 
 for (const kind of ['stored', 'deflate', 'bzip2']) {
 	test(`${kind} zip entries round-trip byte for byte, including same-named files in different folders`, () => {
-		const entries = readAll(join(dir, `${kind}.zip`));
-		assert.deepEqual([...entries.keys()].sort(), Object.keys(files).sort());
+		const extracted = readAll(join(dir, `${kind}.zip`));
+		assert.deepEqual([...extracted.keys()].sort(), Object.keys(files).sort());
 		for (const [name, data] of Object.entries(files)) {
-			assert.equal(sha1(entries.get(name)), sha1(data), name);
+			assert.equal(sha1(extracted.get(name)), sha1(data), name);
 		}
 	});
 }
 
-test('a file that is not an archive fails to open with a message instead of crashing', () => {
-	const handle = open(fileSource(join(dir, 'garbage.cbz')));
-	if (handle === 0) {
-		assert.match(wasm.last_open_error(), /.+/);
-		return;
+test('results are plain objects with exactly the documented fields', () => {
+	const source = fileSource(join(dir, 'stored.zip'));
+	const opened = wasm.open_archive(source);
+	assert.equal(typeof opened.handle, 'number');
+	assert.equal(opened.error, undefined);
+
+	const { entry, error } = wasm.next_entry(opened.handle);
+	assert.equal(error, undefined);
+	assert.equal(typeof entry.path, 'string');
+	assert.equal(typeof entry.isFile, 'boolean');
+	assert.equal(typeof entry.size, 'number');
+
+	const read = wasm.read_entry(opened.handle);
+	assert.ok(read.data instanceof Uint8Array);
+	assert.equal(read.error, undefined);
+
+	wasm.close_archive(opened.handle);
+	source.close();
+});
+
+test('a file that is not an archive fails with a message instead of crashing', () => {
+	const source = fileSource(join(dir, 'garbage.cbz'));
+	const { handle, error } = wasm.open_archive(source);
+	if (handle === undefined) {
+		assert.match(error, /.+/);
+	} else {
+		const next = wasm.next_entry(handle);
+		wasm.close_archive(handle);
+		assert.ok(next.entry === undefined);
 	}
-	const entry = wasm.next_entry(handle);
-	wasm.close_archive(handle);
-	assert.ok(entry === null || typeof entry.error === 'string');
+	source.close();
 });
 
 test('a source whose read() fails gives an error, not a crash', () => {
-	assert.equal(open({ size: 1_000_000, read: () => null }), 0);
-	assert.match(wasm.last_open_error(), /could not read/);
+	const { handle, error } = wasm.open_archive({ size: 1_000_000, read: () => null });
+	assert.equal(handle, undefined);
+	assert.match(error, /could not read/);
 });
 
-test('a read failure mid-archive surfaces as an entry error', () => {
+test('a read failure mid-archive surfaces as an error', () => {
 	const real = fileSource(join(dir, 'deflate.zip'));
 	let calls = 0;
 	const flaky = { size: real.size, read: (offset, length) => (++calls > 1 ? null : real.read(offset, length)) };
-	const handle = open(flaky);
-	let error;
-	if (handle !== 0) {
+	const opened = wasm.open_archive(flaky);
+	let error = opened.error;
+	if (opened.handle !== undefined) {
 		for (;;) {
-			const entry = wasm.next_entry(handle);
-			if (entry === null) break;
-			if (entry.error) { error = entry.error; break; }
-			const data = wasm.read_entry(handle);
-			if (!(data instanceof Uint8Array)) { error = data.error; break; }
+			const next = wasm.next_entry(opened.handle);
+			if (next.error) { error = next.error; break; }
+			if (!next.entry) break;
+			const read = wasm.read_entry(opened.handle);
+			if (read.error) { error = read.error; break; }
 		}
-		wasm.close_archive(handle);
-	} else {
-		error = wasm.last_open_error();
+		wasm.close_archive(opened.handle);
 	}
 	real.close();
 	assert.match(error ?? '', /could not read/);
@@ -140,11 +172,10 @@ test('a read failure mid-archive surfaces as an entry error', () => {
 test('listing a zip seeks between headers instead of reading the whole file', () => {
 	const source = fileSource(join(dir, 'big.zip'));
 	const handle = open(source);
-	let entries = 0;
-	while (wasm.next_entry(handle) !== null) entries++;
+	const count = [...entries(handle)].length;
 	wasm.close_archive(handle);
 	source.close();
-	assert.equal(entries, 20);
+	assert.equal(count, 20);
 	assert.ok(source.bytesRead < source.size / 4, `read ${source.bytesRead} of ${source.size} bytes`);
 });
 
@@ -157,22 +188,18 @@ for (const sample of (process.env.EXTRACT_SAMPLES ?? '').split(':').filter(Boole
 	test(`real archive: ${sample}`, { timeout: 30 * 60_000 }, () => {
 		const source = fileSource(sample);
 		const handle = open(source);
-		assert.notEqual(handle, 0, wasm.last_open_error());
 		let images = 0;
 		let largest = 0;
 		const started = performance.now();
 		let firstImageMs;
 		try {
-			for (;;) {
-				const entry = wasm.next_entry(handle);
-				if (entry === null) break;
-				assert.equal(entry.error, undefined, entry.error);
+			for (const entry of entries(handle)) {
 				if (!entry.isFile || !/\.(jpe?g|png|webp)$/i.test(entry.path) || entry.path.includes('/._')) {
 					wasm.skip_entry(handle);
 					continue;
 				}
-				const data = wasm.read_entry(handle);
-				assert.ok(data instanceof Uint8Array, data?.error);
+				const { data, error } = wasm.read_entry(handle);
+				assert.equal(error, undefined, error);
 				assert.ok(isImage(data), `${entry.path} is not a valid image`);
 				firstImageMs ??= performance.now() - started;
 				largest = Math.max(largest, data.length);

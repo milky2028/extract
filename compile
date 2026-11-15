@@ -8,6 +8,7 @@ set -euo pipefail
 
 : "${LIBARCHIVE_PREFIX:?set LIBARCHIVE_PREFIX (see scripts/build-libarchive.sh)}"
 
+export PATH="$PWD/node_modules/.bin:$PATH" # tsc, used by --emit-tsd
 rm -rf dist && mkdir dist
 
 common=(
@@ -28,14 +29,12 @@ common=(
 )
 
 # Browser build: runs in a dedicated worker; the source's read() uses FileReaderSync.
-browser=(-sENVIRONMENT=worker)
+browser=(-sENVIRONMENT=worker --emit-tsd extract.d.ts)
 
 em++ "${common[@]}" "${browser[@]}" -O3 -flto -o dist/extract.js
 em++ "${common[@]}" "${browser[@]}" -O0 -g -sASSERTIONS=2 -o dist/extract.debug.js
 
 # Node build: same API, the source's read() uses fs.readSync. Used by the test suite.
 em++ "${common[@]}" -sENVIRONMENT=node -O3 -o dist/extract.node.js
-
-cp src/extract.d.ts dist/extract.d.ts
 
 ls -la dist

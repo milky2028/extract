@@ -882,6 +882,183 @@ async function createWasm() {
     };
   var __abort_js = () =>
       abort('native code called abort()');
+  /** @suppress {globalThis} */
+  function readPointer(pointer) {
+      return this.fromWireType(HEAPU32[((pointer)>>2)]);
+    }
+  var runDestructors = (destructors) => {
+      while (destructors.length) {
+        var ptr = destructors.pop();
+        var del = destructors.pop();
+        del(ptr);
+      }
+    };
+  var stackAlloc = (sz) => __emscripten_stack_alloc(sz);
+  var structRegistrations = {
+  };
+  var awaitingDependencies = {
+  };
+  var registeredTypes = {
+  };
+  class BindingError extends Error {
+      constructor(message) {
+        super(message);
+        this.name = 'BindingError';
+      }
+    }
+  var throwBindingError = (message) => { throw new BindingError(message); };
+  var typeDependencies = {
+  };
+  /** @param {Object=} options */
+  function sharedRegisterType(typeID, registeredInstance, options = {}) {
+      var name = registeredInstance.name;
+      if (!typeID) {
+        throwBindingError(`type "${name}" must have a positive integer typeid pointer`);
+      }
+      if (registeredTypes[typeID]) {
+        if (options.ignoreDuplicateRegistrations) {
+          return;
+        } else {
+          throwBindingError(`Cannot register type '${name}' twice`);
+        }
+      }
+  
+      registeredTypes[typeID] = registeredInstance;
+      delete typeDependencies[typeID];
+  
+      if (awaitingDependencies[typeID]) {
+        var callbacks = awaitingDependencies[typeID];
+        delete awaitingDependencies[typeID];
+        callbacks.forEach((cb) => cb());
+      }
+    }
+  /** @param {Object=} options */
+  function registerType(typeID, registeredInstance, options = {}) {
+      return sharedRegisterType(typeID, registeredInstance, options);
+    }
+  class InternalError extends Error {
+      constructor(message) {
+        super(message);
+        this.name = 'InternalError';
+      }
+    }
+  var throwInternalError = (message) => { throw new InternalError(message); };
+  var whenDependentTypesAreResolved = (myTypes, dependentTypes, getTypeConverters) => {
+      myTypes.forEach((type) => typeDependencies[type] = dependentTypes);
+  
+      function onComplete(typeConverters) {
+        var myTypeConverters = getTypeConverters(typeConverters);
+        if (myTypeConverters.length !== myTypes.length) {
+          throwInternalError('Mismatched type converter count');
+        }
+        for (var i = 0; i < myTypes.length; ++i) {
+          registerType(myTypes[i], myTypeConverters[i]);
+        }
+      }
+  
+      var typeConverters = new Array(dependentTypes.length);
+      var unregisteredTypes = [];
+      var registered = 0;
+      for (let [i, dt] of dependentTypes.entries()) {
+        if (registeredTypes[dt]) {
+          typeConverters[i] = registeredTypes[dt];
+        } else {
+          unregisteredTypes.push(dt);
+          (awaitingDependencies[dt] ??= []).push(() => {
+            typeConverters[i] = registeredTypes[dt];
+            ++registered;
+            if (registered === unregisteredTypes.length) {
+              onComplete(typeConverters);
+            }
+          });
+        }
+      }
+      if (0 === unregisteredTypes.length) {
+        onComplete(typeConverters);
+      }
+    };
+  var zeroMemory = (ptr, size) => HEAPU8.fill(0, ptr, ptr + size);
+  var __embind_finalize_value_object = (structTypeID) => {
+      var reg = structRegistrations[structTypeID];
+      delete structRegistrations[structTypeID];
+  
+      var rawConstructor = reg.rawConstructor;
+      var rawDestructor = reg.rawDestructor;
+      var valueSize = reg.valueSize;
+      var isTrivial = reg.isTrivial;
+      var fieldRecords = reg.fields;
+      var fieldTypeIDs = fieldRecords.map((field) => field.getterReturnTypeID).
+                concat(fieldRecords.map((field) => field.setterArgumentTypeID));
+      whenDependentTypesAreResolved([structTypeID], fieldTypeIDs, (fieldTypes) => {
+        var fields = {};
+        for (var [i, field] of fieldRecords.entries()) {
+          const getterReturnType = fieldTypes[i];
+          const getter = field.getter;
+          const getterContext = field.getterContext;
+          const setterArgumentType = fieldTypes[i + fieldRecords.length];
+          const setter = field.setter;
+          const setterContext = field.setterContext;
+          var write;
+          if (setterArgumentType.destructorFunction === null && !setterArgumentType.argStackAlloc) {
+            // See the matching element-write logic in _embind_finalize_value_array.
+            write = (ptr, o) => setter(setterContext, ptr, setterArgumentType.toWireType(null, o));
+          } else {
+            write = (ptr, o) => {
+              var destructors = [];
+              setter(setterContext, ptr, setterArgumentType.toWireType(destructors, o));
+              runDestructors(destructors);
+            };
+          }
+          fields[field.fieldName] = {
+            read: (ptr) => getterReturnType.fromWireType(getter(getterContext, ptr)),
+            write,
+            optional: getterReturnType.optional,
+          };
+        }
+  
+        return [{
+          name: reg.name,
+          fromWireType: (ptr) => {
+            var rv = {};
+            for (var i in fields) {
+              rv[i] = fields[i].read(ptr);
+            }
+            rawDestructor(ptr);
+            return rv;
+          },
+          toWireType: (destructors, o) => {
+            // todo: Here we have an opportunity for -O3 level "unsafe" optimizations:
+            // assume all fields are present without checking.
+            for (var fieldName in fields) {
+              if (!(fieldName in o) && !fields[fieldName].optional) {
+                throw new TypeError(`Missing field: "${fieldName}"`);
+              }
+            }
+            var ptr;
+            if (isTrivial && !destructors) {
+              // See the matching branch in _embind_finalize_value_array: the
+              // invoker manages a stack frame, so the temporary lives on the
+              // wasm stack with no allocation and no destructor bookkeeping;
+              // zero-filled to match the heap path's value-initialization.
+              ptr = stackAlloc(valueSize);
+              zeroMemory(ptr, valueSize);
+            } else {
+              ptr = rawConstructor();
+              if (destructors) {
+                destructors.push(rawDestructor, ptr);
+              }
+            }
+            for (fieldName in fields) {
+              fields[fieldName].write(ptr, o[fieldName]);
+            }
+            return ptr;
+          },
+          readValueFromPointer: readPointer,
+          destructorFunction: isTrivial ? null : rawDestructor,
+          argStackAlloc: isTrivial,
+        }];
+      });
+    };
   var AsciiToString = (ptr) => {
       var str = '';
       while (1) {
@@ -931,46 +1108,6 @@ async function createWasm() {
           throw new TypeError(`invalid integer width (${width}): ${name}`);
       }
     };
-  var awaitingDependencies = {
-  };
-  var registeredTypes = {
-  };
-  class BindingError extends Error {
-      constructor(message) {
-        super(message);
-        this.name = 'BindingError';
-      }
-    }
-  var throwBindingError = (message) => { throw new BindingError(message); };
-  var typeDependencies = {
-  };
-  /** @param {Object=} options */
-  function sharedRegisterType(typeID, registeredInstance, options = {}) {
-      var name = registeredInstance.name;
-      if (!typeID) {
-        throwBindingError(`type "${name}" must have a positive integer typeid pointer`);
-      }
-      if (registeredTypes[typeID]) {
-        if (options.ignoreDuplicateRegistrations) {
-          return;
-        } else {
-          throwBindingError(`Cannot register type '${name}' twice`);
-        }
-      }
-  
-      registeredTypes[typeID] = registeredInstance;
-      delete typeDependencies[typeID];
-  
-      if (awaitingDependencies[typeID]) {
-        var callbacks = awaitingDependencies[typeID];
-        delete awaitingDependencies[typeID];
-        callbacks.forEach((cb) => cb());
-      }
-    }
-  /** @param {Object=} options */
-  function registerType(typeID, registeredInstance, options = {}) {
-      return sharedRegisterType(typeID, registeredInstance, options);
-    }
   /** @suppress {globalThis} */
   var __embind_register_bigint = (typeID, name, size, minRange, maxRange) => {
       name = AsciiToString(name);
@@ -1050,10 +1187,6 @@ async function createWasm() {
         }
       },
   };
-  /** @suppress {globalThis} */
-  function readPointer(pointer) {
-      return this.fromWireType(HEAPU32[((pointer)>>2)]);
-    }
   const EMVAL_LAST_RESERVED_HANDLE = 9;
   var __emval_decref = (handle) => {
       if (handle > EMVAL_LAST_RESERVED_HANDLE && 0 === --emval_handles[handle + 1]) {
@@ -1234,13 +1367,6 @@ async function createWasm() {
       }
       return requiredArgCount;
     }
-  var runDestructors = (destructors) => {
-      while (destructors.length) {
-        var ptr = destructors.pop();
-        var del = destructors.pop();
-        del(ptr);
-      }
-    };
   function craftInvokerFunction(humanName, argTypes, classType, cppInvokerFunc, cppTargetFunc, /** boolean= */ isAsync) {
       // humanName: a human-readable string name for the function to be generated.
       // argTypes: An array that contains the embind type objects for all types in the function signature.
@@ -1390,13 +1516,6 @@ async function createWasm() {
       }
       return array;
     };
-  class InternalError extends Error {
-      constructor(message) {
-        super(message);
-        this.name = 'InternalError';
-      }
-    }
-  var throwInternalError = (message) => { throw new InternalError(message); };
   /** @param {number=} numArguments */
   var replacePublicSymbol = (name, value, numArguments) => {
       if (!hasOwn(Module, name)) {
@@ -1437,40 +1556,6 @@ async function createWasm() {
       types.forEach(visit);
   
       throw new UnboundTypeError(`${message}: ` + unboundTypes.map(getTypeName).join([', ']));
-    };
-  var whenDependentTypesAreResolved = (myTypes, dependentTypes, getTypeConverters) => {
-      myTypes.forEach((type) => typeDependencies[type] = dependentTypes);
-  
-      function onComplete(typeConverters) {
-        var myTypeConverters = getTypeConverters(typeConverters);
-        if (myTypeConverters.length !== myTypes.length) {
-          throwInternalError('Mismatched type converter count');
-        }
-        for (var i = 0; i < myTypes.length; ++i) {
-          registerType(myTypes[i], myTypeConverters[i]);
-        }
-      }
-  
-      var typeConverters = new Array(dependentTypes.length);
-      var unregisteredTypes = [];
-      var registered = 0;
-      for (let [i, dt] of dependentTypes.entries()) {
-        if (registeredTypes[dt]) {
-          typeConverters[i] = registeredTypes[dt];
-        } else {
-          unregisteredTypes.push(dt);
-          (awaitingDependencies[dt] ??= []).push(() => {
-            typeConverters[i] = registeredTypes[dt];
-            ++registered;
-            if (registered === unregisteredTypes.length) {
-              onComplete(typeConverters);
-            }
-          });
-        }
-      }
-      if (0 === unregisteredTypes.length) {
-        onComplete(typeConverters);
-      }
     };
   var __embind_register_function = (name, argCount, rawArgTypesAddr, signature, rawInvoker, fn, isAsync, isNonnullReturn) => {
       var argTypeIDs = heap32VectorToArray(argCount, rawArgTypesAddr);
@@ -1548,6 +1633,10 @@ async function createWasm() {
       }, {
         ignoreDuplicateRegistrations: true,
       });
+    };
+  var EmValOptionalType = Object.assign({optional: true}, EmValType);;
+  var __embind_register_optional = (optionalTypeID, typeID) => {
+      registerType(optionalTypeID, EmValOptionalType);
     };
   var lengthBytesUTF8 = (str) => {
       var len = 0;
@@ -1828,6 +1917,53 @@ async function createWasm() {
         }
       });
     };
+  var __embind_register_user_type = (typeID, name) => {
+      __embind_register_emval(typeID);
+    };
+  var __embind_register_user_type_definition = (typeID, name, definition) => {
+      __embind_register_emval(typeID);
+    };
+  var __embind_register_value_object = (
+      typeID,
+      name,
+      constructorSignature,
+      rawConstructor,
+      destructorSignature,
+      rawDestructor,
+      valueSize,
+      isTrivial
+    ) => {
+      structRegistrations[typeID] = {
+        name: AsciiToString(name),
+        rawConstructor: embind__requireFunction(constructorSignature, rawConstructor),
+        rawDestructor: embind__requireFunction(destructorSignature, rawDestructor),
+        valueSize,
+        isTrivial: !!isTrivial,
+        fields: [],
+      };
+    };
+  var __embind_register_value_object_field = (
+      structTypeID,
+      fieldName,
+      getterReturnTypeID,
+      getterSignature,
+      getter,
+      getterContext,
+      setterArgumentTypeID,
+      setterSignature,
+      setter,
+      setterContext
+    ) => {
+      structRegistrations[structTypeID].fields.push({
+        fieldName: AsciiToString(fieldName),
+        getterReturnTypeID,
+        getter: embind__requireFunction(getterSignature, getter),
+        getterContext,
+        setterArgumentTypeID,
+        setter: embind__requireFunction(setterSignature, setter),
+        setterContext,
+      });
+    };
   var __embind_register_void = (typeID, name) => {
       name = AsciiToString(name);
       registerType(typeID, {
@@ -1943,17 +2079,10 @@ ${functionBody}
       return emval_methodCallers[caller](handle, methodName, destructorsRef, args);
     };
   var __emval_new_cstring = (v) => Emval.toHandle(getStringOrSymbol(v));
-  var __emval_new_object = () => Emval.toHandle({});
   var __emval_run_destructors = (handle) => {
       var destructors = Emval.toValue(handle);
       runDestructors(destructors);
       __emval_decref(handle);
-    };
-  var __emval_set_property = (handle, key, value) => {
-      handle = Emval.toValue(handle);
-      key = Emval.toValue(key);
-      value = Emval.toValue(value);
-      handle[key] = value;
     };
   const INT53_MAX = 9007199254740992;
   const INT53_MIN = -9007199254740992;
@@ -2394,10 +2523,8 @@ Module['FS_createPreloadedFile'] = FS.createPreloadedFile;
   'convertI32PairToI53',
   'convertI32PairToI53Checked',
   'convertU32PairToI53',
-  'stackAlloc',
   'getTempRet0',
   'setTempRet0',
-  'zeroMemory',
   'withStackSave',
   'strError',
   'inetPton4',
@@ -2606,8 +2733,10 @@ missingLibrarySymbols.forEach(missingLibrarySymbol)
   'HEAPU64',
   'stackSave',
   'stackRestore',
+  'stackAlloc',
   'createNamedFunction',
   'ptrToString',
+  'zeroMemory',
   'exitJS',
   'getHeapMax',
   'growMemory',
@@ -2842,6 +2971,8 @@ var wasmImports = {
   /** @export */
   _abort_js: __abort_js,
   /** @export */
+  _embind_finalize_value_object: __embind_finalize_value_object,
+  /** @export */
   _embind_register_bigint: __embind_register_bigint,
   /** @export */
   _embind_register_bool: __embind_register_bool,
@@ -2856,9 +2987,19 @@ var wasmImports = {
   /** @export */
   _embind_register_memory_view: __embind_register_memory_view,
   /** @export */
+  _embind_register_optional: __embind_register_optional,
+  /** @export */
   _embind_register_std_string: __embind_register_std_string,
   /** @export */
   _embind_register_std_wstring: __embind_register_std_wstring,
+  /** @export */
+  _embind_register_user_type: __embind_register_user_type,
+  /** @export */
+  _embind_register_user_type_definition: __embind_register_user_type_definition,
+  /** @export */
+  _embind_register_value_object: __embind_register_value_object,
+  /** @export */
+  _embind_register_value_object_field: __embind_register_value_object_field,
   /** @export */
   _embind_register_void: __embind_register_void,
   /** @export */
@@ -2876,11 +3017,7 @@ var wasmImports = {
   /** @export */
   _emval_new_cstring: __emval_new_cstring,
   /** @export */
-  _emval_new_object: __emval_new_object,
-  /** @export */
   _emval_run_destructors: __emval_run_destructors,
-  /** @export */
-  _emval_set_property: __emval_set_property,
   /** @export */
   _localtime_js: __localtime_js,
   /** @export */

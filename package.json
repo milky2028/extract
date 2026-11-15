@@ -26,5 +26,8 @@
     "test": "node --test test/"
   },
   "author": "Tyler Gross",
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^6.0.3"
+  }
 }
