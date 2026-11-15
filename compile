@@ -8,7 +8,6 @@ set -euo pipefail
 
 : "${LIBARCHIVE_PREFIX:?set LIBARCHIVE_PREFIX (see scripts/build-libarchive.sh)}"
 
-export PATH="$PWD/node_modules/.bin:$PATH" # tsc for --emit-tsd
 rm -rf dist && mkdir dist
 
 common=(
@@ -23,18 +22,20 @@ common=(
   -sEXPORT_ES6
   -sALLOW_MEMORY_GROWTH
   -sSTACK_SIZE=1MB
-  -sFILESYSTEM=1
+  -sFILESYSTEM=0 # libarchive reads through JS callbacks; no Emscripten FS
   -fno-exceptions
   --pre-js src/locateFile.js
 )
 
-# Browser build: runs in a dedicated worker and reads Files through WORKERFS.
-browser=(-sENVIRONMENT=worker -lworkerfs.js -sEXPORTED_RUNTIME_METHODS=FS,WORKERFS --emit-tsd extract.d.ts)
+# Browser build: runs in a dedicated worker; the source's read() uses FileReaderSync.
+browser=(-sENVIRONMENT=worker)
 
 em++ "${common[@]}" "${browser[@]}" -O3 -flto -o dist/extract.js
 em++ "${common[@]}" "${browser[@]}" -O0 -g -sASSERTIONS=2 -o dist/extract.debug.js
 
-# Node build: used by the test suite, reads the real filesystem directly.
-em++ "${common[@]}" -sENVIRONMENT=node -sNODERAWFS=1 -sEXPORTED_RUNTIME_METHODS=FS -O3 -o dist/extract.node.js
+# Node build: same API, the source's read() uses fs.readSync. Used by the test suite.
+em++ "${common[@]}" -sENVIRONMENT=node -O3 -o dist/extract.node.js
+
+cp src/extract.d.ts dist/extract.d.ts
 
 ls -la dist

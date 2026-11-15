@@ -2,39 +2,51 @@
 
 libarchive compiled to WebAssembly for reading `.zip`/`.cbz` (stored, deflate, bzip2) and `.rar`/`.cbr` (RAR 4 and 5) archives.
 
-Archives are read **by path, in chunks**. They are never copied into wasm memory, so archives of any size work (tested with 4.8 GB) using about 20 MB of wasm heap.
+Archives are read **in slices through a callback**. They are never copied into wasm memory and there is no Emscripten filesystem, so archives of any size work (tested with 4.8 GB) using about 20 MB of wasm heap.
 
-## Browser (dedicated worker)
+## Usage
+
+You supply a source, `{ size, read(offset, length) }`. libarchive seeks around in it, so listing a multi-GB zip only reads a few MB of headers.
+
+### Browser (dedicated worker)
 
 ```js
 import init from 'extract-zip-rar';
 
 const wasm = await init();
-wasm.FS.mkdir('/input');
-wasm.FS.mount(wasm.WORKERFS, { blobs: [{ name: 'archive', data: file }] }, '/input');
+const reader = new FileReaderSync();
+const source = {
+  size: file.size,
+  read(offset, length) {
+    try {
+      return new Uint8Array(reader.readAsArrayBuffer(file.slice(offset, offset + length)));
+    } catch {
+      return null; // read() must not throw
+    }
+  }
+};
 
-const handle = wasm.open_archive('/input/archive');
+const handle = wasm.open_archive(source);
 if (handle === 0) throw new Error(wasm.last_open_error());
 try {
   for (let entry; (entry = wasm.next_entry(handle)) !== null; ) {
-    if (entry.error) throw new Error(entry.error);
+    if ('error' in entry) throw new Error(entry.error);
     if (!entry.isFile) continue;
     const bytes = wasm.read_entry(handle); // Uint8Array owned by JS, or { error }
     // or wasm.skip_entry(handle) to skip it cheaply
   }
 } finally {
   wasm.close_archive(handle);
-  wasm.FS.unmount('/input');
 }
 ```
 
-`next_entry` returns `null` at the end, `{ error }` on failure, or `{ path, isFile, size }`. `size` is `-1` when the archive does not record it up front.
+`next_entry` returns `null` at the end, `{ error }` on failure, or `{ path, isFile, size }`. `size` is `-1` when the archive does not record it up front. Full types: `dist/extract.d.ts`.
 
 Set `globalThis.wasmURL` before `init()` if your bundler renames `extract.wasm`.
 
-## Node
+### Node
 
-`extract-zip-rar/node` exposes the same API, reading the real filesystem: `wasm.open_archive('/path/to/book.cbz')`.
+`extract-zip-rar/node` has the same API. Back the source with `fs.readSync(fd, buffer, 0, length, offset)`; see `test/extract.test.mjs`.
 
 ## Building
 

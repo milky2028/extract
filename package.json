@@ -11,6 +11,7 @@
       "import": "./dist/extract.js"
     },
     "./node": {
+      "types": "./dist/extract.d.ts",
       "import": "./dist/extract.node.js"
     },
     "./wasm": "./dist/extract.wasm",
@@ -25,8 +26,5 @@
     "test": "node --test test/"
   },
   "author": "Tyler Gross",
-  "license": "MIT",
-  "devDependencies": {
-    "typescript": "^5.7.3"
-  }
+  "license": "MIT"
 }

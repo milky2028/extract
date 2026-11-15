@@ -1,250 +1,46 @@
-// TypeScript bindings for emscripten-generated code.  Automatically generated at compile time.
-declare namespace RuntimeExports {
-    namespace FS {
-        export let root: any;
-        export let mounts: any[];
-        export let devices: {};
-        export let streams: any[];
-        export let nextInode: number;
-        export let nameTable: any[];
-        export let currentPath: string;
-        export let initialized: boolean;
-        export let ignorePermissions: boolean;
-        export let syncFSRequests: number;
-        export { ErrnoError };
-        export { FSStream };
-        export { FSNode };
-        export function lookupPath(path: any, opts?: {}): {
-            path: string;
-            node?: undefined;
-        } | {
-            path: string;
-            node: any;
-        };
-        export function getPath(node: any): any;
-        export function hashName(parentid: any, name: any): number;
-        export function hashAddNode(node: any): void;
-        export function hashRemoveNode(node: any): void;
-        export function lookupNode(parent: any, name: any): any;
-        export function createNode(parent: any, name: any, mode: any, rdev?: any): any;
-        export function destroyNode(node: any): void;
-        export function isRoot(node: any): boolean;
-        export function isMountpoint(node: any): boolean;
-        export function isFile(mode: any): boolean;
-        export function isDir(mode: any): boolean;
-        export function isLink(mode: any): boolean;
-        export function isChrdev(mode: any): boolean;
-        export function isBlkdev(mode: any): boolean;
-        export function isFIFO(mode: any): boolean;
-        export function isSocket(mode: any): boolean;
-        export function flagsToPermissionString(flag: any): string;
-        export function nodePermissions(node: any, perms: any): 0 | 2;
-        export function mayLookup(dir: any): any;
-        export function mayCreate(dir: any, name: any): any;
-        export function mayDelete(dir: any, name: any, isdir: any): any;
-        export function mayOpen(node: any, flags: any): any;
-        export function checkOpExists(op: any, err: any): any;
-        export function nextfd(): number;
-        export function getStreamChecked(fd: any): any;
-        export function getStream(fd: any): any;
-        export function createStream(stream: any, fd?: number): any;
-        export function closeStream(fd: any): void;
-        export function dupStream(origStream: any, fd?: number): any;
-        export function doSetAttr(stream: any, node: any, attr: any): void;
-        export namespace chrdev_stream_ops {
-            function open(stream: any): void;
-            function llseek(): never;
-        }
-        export function major(dev: any): number;
-        export function minor(dev: any): number;
-        export function makedev(ma: any, mi: any): number;
-        export function registerDevice(dev: any, ops: any): void;
-        export function getDevice(dev: any): any;
-        export function getMounts(mount: any): any[];
-        export function syncfs(populate: any, callback: any): void;
-        export function mount(type: any, opts: any, mountpoint: any): any;
-        export function unmount(mountpoint: any): void;
-        export function lookup(parent: any, name: any): any;
-        export function mknod(path: any, mode: any, dev: any): any;
-        export function statfs(path: any): any;
-        export function statfsStream(stream: any): any;
-        export function statfsNode(node: any): {
-            bsize: number;
-            frsize: number;
-            blocks: number;
-            bfree: number;
-            bavail: number;
-            files: any;
-            ffree: number;
-            fsid: number;
-            flags: number;
-            namelen: number;
-        };
-        export function create(path: any, mode?: number): any;
-        export function mkdir(path: any, mode?: number): any;
-        export function mkdirTree(path: any, mode?: number): void;
-        export function mkdev(path: any, mode: any, dev?: any): any;
-        export function symlink(oldpath: any, newpath: any): any;
-        export function link(oldpath: any, newpath: any, flags: any): any;
-        export function rename(old_path: any, new_path: any): void;
-        export function rmdir(path: any): void;
-        export function readdir(path: any): any;
-        export function unlink(path: any): void;
-        export function readlink(path: any): any;
-        export function stat(path: any, dontFollow?: boolean): any;
-        export function fstat(fd: any): any;
-        export function lstat(path: any): any;
-        export function doChmod(stream: any, node: any, mode: any, dontFollow?: boolean): void;
-        export function chmod(path: any, mode: any, dontFollow?: boolean): void;
-        export function lchmod(path: any, mode: any): void;
-        export function fchmod(fd: any, mode: any): void;
-        export function doChown(stream: any, node: any, dontFollow?: boolean): void;
-        export function chown(path: any, uid: any, gid: any, dontFollow?: boolean): void;
-        export function lchown(path: any, uid: any, gid: any): void;
-        export function fchown(fd: any, uid: any, gid: any): void;
-        export function doTruncate(stream: any, node: any, len: any): void;
-        export function truncate(path: any, len: any): void;
-        export function ftruncate(fd: any, len: any): void;
-        export function utime(path: any, atime: any, mtime: any, dontFollow?: boolean): void;
-        export function open(path: any, flags: any, mode?: number): any;
-        export function close(stream: any): void;
-        export function isClosed(stream: any): boolean;
-        export function llseek(stream: any, offset: any, whence: any): any;
-        export function read(stream: any, buffer: any, offset: any, length: any, position?: any): any;
-        export function write(stream: any, buffer: any, offset: any, length: any, position?: any, canOwn?: any): any;
-        export function mmap(stream: any, length: any, position: any, prot: any, flags: any): any;
-        export function msync(stream: any, buffer: any, offset: any, length: any, mmapFlags: any): any;
-        export function ioctl(stream: any, cmd: any, arg: any): any;
-        export function readFile(path: any, opts?: {}): Uint8Array<any>;
-        export function writeFile(path: any, data: any, opts?: {}): void;
-        export function cwd(): any;
-        export function chdir(path: any): void;
-        export function createDefaultDirectories(): void;
-        export function createDefaultDevices(): void;
-        export function createSpecialDirectories(): void;
-        export function createStandardStreams(input: any, output: any, error: any): void;
-        export function staticInit(): void;
-        export function init(input?: any, output?: any, error?: any): void;
-        export function quit(): void;
-        export function analyzePath(path: any, dontResolveLastLink?: boolean): {
-            isRoot: boolean;
-            exists: boolean;
-            error: number;
-            name: any;
-            path: any;
-            object: any;
-            parentExists: boolean;
-            parentPath: any;
-            parentObject: any;
-        };
-        export function createPath(parent: any, path: any, canRead?: any, canWrite?: any): any;
-        export function createFile(parent: any, name: any, properties: any, canRead?: any, canWrite?: any): any;
-        export function createDataFile(parent: any, name: any, data?: any, canRead?: any, canWrite?: any, canOwn?: any): void;
-        export function createDevice(parent: any, name: any, input?: any, output?: any): any;
-        export function forceLoadFile(obj: any): boolean;
-        export function createLazyFile(parent: any, name: any, url: any, canRead?: any, canWrite?: any): any;
-    }
-    namespace WORKERFS {
-        let reader: any;
-        function mount(mount: any): any;
-        function createNode(parent: any, name: any, mode: any, dev?: any, contents?: any, mtime?: any): any;
-        namespace node_ops {
-            function getattr(node: any): {
-                dev: number;
-                ino: any;
-                mode: any;
-                nlink: number;
-                uid: number;
-                gid: number;
-                rdev: number;
-                size: any;
-                atime: Date;
-                mtime: Date;
-                ctime: Date;
-                blksize: number;
-                blocks: number;
-            };
-            function setattr(node: any, attr: any): void;
-            function lookup(parent: any, name: any): never;
-            function mknod(parent: any, name: any, mode: any, dev: any): never;
-            function rename(oldNode: any, newDir: any, newName: any): never;
-            function unlink(parent: any, name: any): never;
-            function rmdir(parent: any, name: any): never;
-            function readdir(node: any): string[];
-            function symlink(parent: any, newName: any, oldPath: any): never;
-        }
-        namespace stream_ops {
-            function read(stream: any, buffer: any, offset: any, length: any, position: any): any;
-            function write(stream: any, buffer: any, offset: any, length: any, position: any): never;
-            function llseek(stream: any, offset: any, whence: any): any;
-        }
-    }
-}
-declare class ErrnoError extends Error {
-    constructor(errno: any);
-    errno: any;
-    code: string;
-}
-declare class FSStream {
-    shared: {};
-    set object(val: any);
-    get object(): any;
-    node: any;
-    get isRead(): boolean;
-    get isWrite(): boolean;
-    get isAppend(): number;
-    set flags(val: any);
-    get flags(): any;
-    set position(val: any);
-    get position(): any;
-}
-declare class FSNode {
-    constructor(parent: any, name: any, mode: any, rdev: any);
-    node_ops: {};
-    stream_ops: {};
-    readMode: number;
-    writeMode: number;
-    mounted: any;
-    parent: any;
-    mount: any;
-    id: number;
-    name: any;
-    mode: any;
-    rdev: any;
-    atime: number;
-    mtime: number;
-    ctime: number;
-    set read(val: boolean);
-    get read(): boolean;
-    set write(val: boolean);
-    get write(): boolean;
-    get isFolder(): any;
-    get isDevice(): any;
-    addListener(cb: any, exclusive?: boolean): {
-        listeners: any;
-        entry: {
-            cb: any;
-            exclusive: boolean;
-        };
-    };
-    notifyListeners(flags: any): void;
-    exclTurn: any;
-}
-interface WasmModule {
-  ___set_stack_limits(_0: number, _1: number): void;
+/**
+ * Where the archive's bytes come from. The archive is read in slices on demand, never copied
+ * whole into wasm memory.
+ *
+ * Browser (dedicated worker):
+ *   const reader = new FileReaderSync();
+ *   const source = { size: file.size, read: (offset, length) =>
+ *     new Uint8Array(reader.readAsArrayBuffer(file.slice(offset, offset + length))) };
+ */
+export interface ArchiveSource {
+	/** Total size of the archive in bytes. */
+	readonly size: number;
+	/**
+	 * Returns up to `length` bytes starting at `offset`. Must not throw: return null if the data
+	 * cannot be read, and the current operation fails with an error instead.
+	 */
+	read(offset: number, length: number): Uint8Array | null;
 }
 
-type EmbindString = ArrayBuffer|Uint8Array|Uint8ClampedArray|Int8Array|string;
-interface EmbindModule {
-  close_archive(_0: number): void;
-  skip_entry(_0: number): boolean;
-  memory_bytes(): number;
-  open_archive(_0: EmbindString): number;
-  last_open_error(): string;
-  libarchive_version(): string;
-  next_entry(_0: number): any;
-  read_entry(_0: number): any;
+export type ArchiveEntry = {
+	path: string;
+	isFile: boolean;
+	/** Uncompressed size in bytes, or -1 when the archive does not record it up front. */
+	size: number;
+};
+
+export type ExtractError = { error: string };
+
+export interface ExtractModule {
+	/** Returns a handle, or 0 if the archive cannot be opened (see last_open_error). */
+	open_archive(source: ArchiveSource): number;
+	last_open_error(): string;
+	/** Advances to the next entry: the entry, an error, or null at the end of the archive. */
+	next_entry(handle: number): ArchiveEntry | ExtractError | null;
+	/** Reads the whole current entry into a JS-owned Uint8Array. */
+	read_entry(handle: number): Uint8Array | ExtractError;
+	/** Skips the current entry's data (a seek for zip and non-solid RAR). */
+	skip_entry(handle: number): boolean;
+	close_archive(handle: number): void;
+	/** e.g. "libarchive 3.8.11 zlib/1.3.2 bz2lib/1.0.6" */
+	libarchive_version(): string;
+	/** Current wasm heap size, for memory diagnostics. */
+	memory_bytes(): number;
 }
 
-export type MainModule = WasmModule & typeof RuntimeExports & EmbindModule;
-export default function MainModuleFactory (options?: unknown): Promise<MainModule>;
+export default function init(options?: unknown): Promise<ExtractModule>;

@@ -1,10 +1,10 @@
-// Run: node --test test/   (uses dist/extract.node.js, which reads the real filesystem)
+// Run: node --test test/   (uses dist/extract.node.js with an fs.readSync-backed source)
 // Optional: EXTRACT_SAMPLES="/a.cbz:/b.cbr" also checks real archives (headers + every image decodes as JPEG/PNG/WebP).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
+import { closeSync, fstatSync, mkdtempSync, mkdirSync, openSync, readSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -13,8 +13,30 @@ const wasm = await init();
 
 const sha1 = (data) => createHash('sha1').update(data).digest('hex');
 
+/** The source interface the library reads through: { size, read(offset, length) }. */
+function fileSource(path) {
+	const fd = openSync(path, 'r');
+	const source = {
+		size: fstatSync(fd).size,
+		bytesRead: 0,
+		read(offset, length) {
+			const buffer = Buffer.allocUnsafe(length);
+			const read = readSync(fd, buffer, 0, length, offset);
+			source.bytesRead += read;
+			return new Uint8Array(buffer.buffer, buffer.byteOffset, read);
+		},
+		close: () => closeSync(fd)
+	};
+	return source;
+}
+
+function open(source) {
+	return wasm.open_archive(source);
+}
+
 function readAll(path) {
-	const handle = wasm.open_archive(path);
+	const source = fileSource(path);
+	const handle = open(source);
 	assert.notEqual(handle, 0, `open failed: ${wasm.last_open_error()}`);
 	const entries = new Map();
 	try {
@@ -29,6 +51,7 @@ function readAll(path) {
 		}
 	} finally {
 		wasm.close_archive(handle);
+		source.close();
 	}
 	return entries;
 }
@@ -50,6 +73,17 @@ function makeFixture() {
 	execFileSync('zip', ['-q', '-9', join(dir, 'deflate.zip'), ...names], { cwd: src });
 	execFileSync('zip', ['-q', '-9', '-Z', 'bzip2', join(dir, 'bzip2.zip'), ...names], { cwd: src });
 	writeFileSync(join(dir, 'garbage.cbz'), Buffer.alloc(4096, 7));
+
+	// 40 MB of incompressible pages: listing it should only touch headers.
+	const big = join(dir, 'big-src');
+	mkdirSync(big);
+	const bigNames = [];
+	for (let i = 0; i < 20; i++) {
+		const name = `${String(i).padStart(3, '0')}.jpg`;
+		writeFileSync(join(big, name), createHash('sha512').update(String(i)).digest().toString('hex').repeat(16_000).slice(0, 2_000_000));
+		bigNames.push(name);
+	}
+	execFileSync('zip', ['-q', '-0', join(dir, 'big.zip'), ...bigNames], { cwd: big });
 	return { dir, files };
 }
 
@@ -66,7 +100,7 @@ for (const kind of ['stored', 'deflate', 'bzip2']) {
 }
 
 test('a file that is not an archive fails to open with a message instead of crashing', () => {
-	const handle = wasm.open_archive(join(dir, 'garbage.cbz'));
+	const handle = open(fileSource(join(dir, 'garbage.cbz')));
 	if (handle === 0) {
 		assert.match(wasm.last_open_error(), /.+/);
 		return;
@@ -76,9 +110,42 @@ test('a file that is not an archive fails to open with a message instead of cras
 	assert.ok(entry === null || typeof entry.error === 'string');
 });
 
-test('a missing file fails to open', () => {
-	assert.equal(wasm.open_archive(join(dir, 'nope.cbz')), 0);
-	assert.match(wasm.last_open_error(), /.+/);
+test('a source whose read() fails gives an error, not a crash', () => {
+	assert.equal(open({ size: 1_000_000, read: () => null }), 0);
+	assert.match(wasm.last_open_error(), /could not read/);
+});
+
+test('a read failure mid-archive surfaces as an entry error', () => {
+	const real = fileSource(join(dir, 'deflate.zip'));
+	let calls = 0;
+	const flaky = { size: real.size, read: (offset, length) => (++calls > 1 ? null : real.read(offset, length)) };
+	const handle = open(flaky);
+	let error;
+	if (handle !== 0) {
+		for (;;) {
+			const entry = wasm.next_entry(handle);
+			if (entry === null) break;
+			if (entry.error) { error = entry.error; break; }
+			const data = wasm.read_entry(handle);
+			if (!(data instanceof Uint8Array)) { error = data.error; break; }
+		}
+		wasm.close_archive(handle);
+	} else {
+		error = wasm.last_open_error();
+	}
+	real.close();
+	assert.match(error ?? '', /could not read/);
+});
+
+test('listing a zip seeks between headers instead of reading the whole file', () => {
+	const source = fileSource(join(dir, 'big.zip'));
+	const handle = open(source);
+	let entries = 0;
+	while (wasm.next_entry(handle) !== null) entries++;
+	wasm.close_archive(handle);
+	source.close();
+	assert.equal(entries, 20);
+	assert.ok(source.bytesRead < source.size / 4, `read ${source.bytesRead} of ${source.size} bytes`);
 });
 
 const isImage = (d) =>
@@ -88,7 +155,8 @@ const isImage = (d) =>
 
 for (const sample of (process.env.EXTRACT_SAMPLES ?? '').split(':').filter(Boolean)) {
 	test(`real archive: ${sample}`, { timeout: 30 * 60_000 }, () => {
-		const handle = wasm.open_archive(sample);
+		const source = fileSource(sample);
+		const handle = open(source);
 		assert.notEqual(handle, 0, wasm.last_open_error());
 		let images = 0;
 		let largest = 0;
@@ -112,6 +180,7 @@ for (const sample of (process.env.EXTRACT_SAMPLES ?? '').split(':').filter(Boole
 			}
 		} finally {
 			wasm.close_archive(handle);
+			source.close();
 		}
 		const heapMB = wasm.memory_bytes() / 2 ** 20;
 		console.log(`  ${images} images, first after ${firstImageMs?.toFixed(0)} ms, total ${((performance.now() - started) / 1000).toFixed(1)} s, largest page ${(largest / 2 ** 20).toFixed(1)} MB${heapMB ? `, wasm heap ${heapMB.toFixed(0)} MB` : ''}`);
