@@ -24,18 +24,17 @@ common=(
   -sALLOW_MEMORY_GROWTH
   -sSTACK_SIZE=1MB
   -sFILESYSTEM=1
-  -sEXPORTED_RUNTIME_METHODS=FS
   -fno-exceptions
   --pre-js src/locateFile.js
 )
 
 # Browser build: runs in a dedicated worker and reads Files through WORKERFS.
-browser=(-sENVIRONMENT=worker -lworkerfs.js --emit-tsd extract.d.ts)
+browser=(-sENVIRONMENT=worker -lworkerfs.js -sEXPORTED_RUNTIME_METHODS=FS,WORKERFS --emit-tsd extract.d.ts)
 
 em++ "${common[@]}" "${browser[@]}" -O3 -flto -o dist/extract.js
 em++ "${common[@]}" "${browser[@]}" -O0 -g -sASSERTIONS=2 -o dist/extract.debug.js
 
 # Node build: used by the test suite, reads the real filesystem directly.
-em++ "${common[@]}" -sENVIRONMENT=node -sNODERAWFS=1 -O3 -o dist/extract.node.js
+em++ "${common[@]}" -sENVIRONMENT=node -sNODERAWFS=1 -sEXPORTED_RUNTIME_METHODS=FS -O3 -o dist/extract.node.js
 
 ls -la dist

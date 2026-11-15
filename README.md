@@ -11,7 +11,7 @@ import init from 'extract-zip-rar';
 
 const wasm = await init();
 wasm.FS.mkdir('/input');
-wasm.FS.mount(wasm.FS.filesystems.WORKERFS, { blobs: [{ name: 'archive', data: file }] }, '/input');
+wasm.FS.mount(wasm.WORKERFS, { blobs: [{ name: 'archive', data: file }] }, '/input');
 
 const handle = wasm.open_archive('/input/archive');
 if (handle === 0) throw new Error(wasm.last_open_error());

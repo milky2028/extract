@@ -144,6 +144,41 @@ declare namespace RuntimeExports {
         export function forceLoadFile(obj: any): boolean;
         export function createLazyFile(parent: any, name: any, url: any, canRead?: any, canWrite?: any): any;
     }
+    namespace WORKERFS {
+        let reader: any;
+        function mount(mount: any): any;
+        function createNode(parent: any, name: any, mode: any, dev?: any, contents?: any, mtime?: any): any;
+        namespace node_ops {
+            function getattr(node: any): {
+                dev: number;
+                ino: any;
+                mode: any;
+                nlink: number;
+                uid: number;
+                gid: number;
+                rdev: number;
+                size: any;
+                atime: Date;
+                mtime: Date;
+                ctime: Date;
+                blksize: number;
+                blocks: number;
+            };
+            function setattr(node: any, attr: any): void;
+            function lookup(parent: any, name: any): never;
+            function mknod(parent: any, name: any, mode: any, dev: any): never;
+            function rename(oldNode: any, newDir: any, newName: any): never;
+            function unlink(parent: any, name: any): never;
+            function rmdir(parent: any, name: any): never;
+            function readdir(node: any): string[];
+            function symlink(parent: any, newName: any, oldPath: any): never;
+        }
+        namespace stream_ops {
+            function read(stream: any, buffer: any, offset: any, length: any, position: any): any;
+            function write(stream: any, buffer: any, offset: any, length: any, position: any): never;
+            function llseek(stream: any, offset: any, whence: any): any;
+        }
+    }
 }
 declare class ErrnoError extends Error {
     constructor(errno: any);

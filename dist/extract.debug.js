@@ -5608,6 +5608,7 @@ ${functionBody}
   
 
 
+
   var syscallGetVarargP = syscallGetVarargI;
   var _exit = exitJS;
   
@@ -5665,6 +5666,7 @@ if (Module['printErr']) err = Module['printErr'];
 
 // Begin runtime exports
   Module['FS'] = FS;
+  Module['WORKERFS'] = WORKERFS;
   var missingLibrarySymbols = [
   'writeI53ToI64',
   'writeI53ToI64Clamped',
@@ -6127,7 +6129,6 @@ missingLibrarySymbols.forEach(missingLibrarySymbol)
   'emval_lookupTypes',
   'emval_methodCallers',
   'emval_addMethodCaller',
-  'WORKERFS',
 ];
 unexportedSymbols.forEach(unexportedRuntimeSymbol);
 
