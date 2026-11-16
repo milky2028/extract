@@ -1,13 +1,12 @@
-Module.locateFile = (url) => {
-  if (url.includes(".wasm.map")) {
-    globalThis.wasmSourceMapURL ?? url;
+// Lets the host app point Emscripten at bundler-hashed asset URLs.
+Module.locateFile = (url, prefix) => {
+  if (url.endsWith(".wasm.map")) {
+    return globalThis.wasmSourceMapURL ?? prefix + url;
   }
 
-  if (url.includes("worker")) {
-    return globalThis.workerURL ?? url;
+  if (url.endsWith(".wasm")) {
+    return globalThis.wasmURL ?? prefix + url;
   }
 
-  if (url.includes("wasm")) {
-    return globalThis.wasmURL ?? url;
-  }
+  return prefix + url;
 };

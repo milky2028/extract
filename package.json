@@ -1,25 +1,36 @@
 {
   "name": "extract-zip-rar",
-  "version": "0.19.3",
-  "description": "Utility using libarchive to extract .zip and .rar archives.",
+  "version": "1.0.0",
+  "description": "libarchive compiled to WebAssembly: stream .zip/.cbz and .rar/.cbr archives of any size.",
   "type": "module",
   "main": "./dist/extract.js",
-  "types": "./dist/extract.d.js",
+  "types": "./dist/extract.d.ts",
   "exports": {
     ".": {
+      "types": "./dist/extract.d.ts",
       "import": "./dist/extract.js"
     },
+    "./node": {
+      "types": "./dist/extract.d.ts",
+      "import": "./dist/extract.node.js"
+    },
+    "./wasm": "./dist/extract.wasm",
+    "./debug": "./dist/extract.debug.js",
+    "./debug.wasm": "./dist/extract.debug.wasm",
     "./package.json": "./package.json"
   },
   "files": [
     "dist"
   ],
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --test test/",
+    "test:asan": "scripts/test-asan.sh",
+    "prepack": "node scripts/check-dist.mjs",
+    "prepublishOnly": "node --test test/"
   },
   "author": "Tyler Gross",
   "license": "MIT",
   "devDependencies": {
-    "typescript": "^5.7.3"
+    "typescript": "^6.0.3"
   }
 }

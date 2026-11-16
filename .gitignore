@@ -31,7 +31,8 @@
 *.out
 *.app
 
-test
+test/samples
 .DS_Store
 
 node_modules
+dist/
