@@ -295,11 +295,12 @@ EMSCRIPTEN_BINDINGS(extract) {
   register_optional<ArchiveEntry>();
   register_optional<Uint8Array>();
 
-  function("open_archive", &open_archive);
-  function("close_archive", &close_archive);
-  function("next_entry", &next_entry);
-  function("read_entry", &read_entry);
-  function("skip_entry", &skip_entry);
-  function("libarchive_version", &libarchive_version);
-  function("memory_bytes", &memory_bytes);
+  // The parenthesized names become the argument names in the generated TypeScript.
+  function("open_archive(source)", &open_archive);
+  function("close_archive(handle)", &close_archive);
+  function("next_entry(handle)", &next_entry);
+  function("read_entry(handle)", &read_entry);
+  function("skip_entry(handle)", &skip_entry);
+  function("libarchive_version()", &libarchive_version);
+  function("memory_bytes()", &memory_bytes);
 }

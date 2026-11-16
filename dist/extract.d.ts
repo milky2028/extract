@@ -27,11 +27,11 @@ export type NextEntryResult = {
 };
 
 interface EmbindModule {
-  open_archive(_0: ArchiveSource): OpenResult;
-  close_archive(_0: number): void;
-  read_entry(_0: number): ReadEntryResult;
-  skip_entry(_0: number): boolean;
-  next_entry(_0: number): NextEntryResult;
+  open_archive(source: ArchiveSource): OpenResult;
+  close_archive(handle: number): void;
+  read_entry(handle: number): ReadEntryResult;
+  skip_entry(handle: number): boolean;
+  next_entry(handle: number): NextEntryResult;
   memory_bytes(): number;
   libarchive_version(): string;
 }
