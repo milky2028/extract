@@ -1,5 +1,6 @@
 // Run: node --test test/   (uses dist/extract.node.js with an fs.readSync-backed source)
 // Optional: EXTRACT_SAMPLES="/a.cbz:/b.cbr" also checks real archives (headers + every image decodes as JPEG/PNG/WebP).
+// EXTRACT_MODULE=/path/to/extract.node.js tests another build (scripts/test-asan.sh uses this).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -8,7 +9,8 @@ import { closeSync, fstatSync, mkdtempSync, mkdirSync, openSync, readSync, write
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const { default: init } = await import('../dist/extract.node.js');
+const modulePath = process.env.EXTRACT_MODULE ?? new URL('../dist/extract.node.js', import.meta.url).href;
+const { default: init } = await import(modulePath.startsWith('file:') ? modulePath : `file://${modulePath}`);
 const wasm = await init();
 
 const sha1 = (data) => createHash('sha1').update(data).digest('hex');

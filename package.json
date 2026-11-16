@@ -24,6 +24,7 @@
   ],
   "scripts": {
     "test": "node --test test/",
+    "test:asan": "scripts/test-asan.sh",
     "prepack": "node scripts/check-dist.mjs",
     "prepublishOnly": "node --test test/"
   },

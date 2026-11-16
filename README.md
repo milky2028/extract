@@ -61,5 +61,6 @@ node --test test/
 ```
 
 `EXTRACT_SAMPLES="/a.cbz:/b.cbr" node --test test/` also verifies real archives.
+`LIBARCHIVE_PREFIX=... npm run test:asan` runs the suite against an AddressSanitizer build.
 
 `dist/` is not committed. It is built locally and shipped in the npm package. `npm publish` first checks that `dist/` is complete and was built with zlib and bzip2 (`scripts/check-dist.mjs`), then runs the tests.
